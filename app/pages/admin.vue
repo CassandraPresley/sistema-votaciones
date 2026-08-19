@@ -1,32 +1,60 @@
 <template>
+
   <div class="pantalla">
+
     <div class="panel">
 
-      <!-- ========================================= -->
-      <!-- ENCABEZADO -->
-      <!-- ========================================= -->
 
-      <div v-if="sesion" class="encabezado">
+      <!-- ================================================= -->
+      <!-- ENCABEZADO -->
+      <!-- ================================================= -->
+
+      <div
+        v-if="sesion"
+        class="encabezado"
+      >
+
         <div>
-          <h1>PANEL DE ADMINISTRADOR</h1>
-          <p>Bienvenido, {{ usuario }}</p>
+
+          <h1>
+            PANEL DE ADMINISTRADOR
+          </h1>
+
+          <p>
+            Bienvenido, {{ usuario }}
+          </p>
+
         </div>
 
-        <button class="btn-salir" @click="salir">
+
+        <button
+          class="btn-salir"
+          @click="salir"
+        >
           CERRAR SESIÓN
         </button>
+
       </div>
 
 
-      <!-- ========================================= -->
+
+      <!-- ================================================= -->
       <!-- LOGIN -->
-      <!-- ========================================= -->
+      <!-- ================================================= -->
 
-      <div v-if="!sesion" class="login">
+      <div
+        v-if="!sesion"
+        class="login"
+      >
 
-        <h1>ADMINISTRADOR</h1>
+        <h1>
+          ADMINISTRADOR
+        </h1>
 
-        <p>Ingresa tus datos</p>
+        <p>
+          Ingresa tus datos
+        </p>
+
 
         <input
           v-model="usuario"
@@ -36,6 +64,7 @@
           @keyup.enter="entrar"
         />
 
+
         <input
           v-model="password"
           type="password"
@@ -44,28 +73,43 @@
           @keyup.enter="entrar"
         />
 
+
         <button
           class="btn azul"
           @click="entrar"
           :disabled="cargando"
         >
-          {{ cargando ? 'ENTRANDO...' : 'ENTRAR' }}
+
+          {{
+            cargando
+              ? 'ENTRANDO...'
+              : 'ENTRAR'
+          }}
+
         </button>
 
-        <p v-if="mensaje" class="error">
+
+        <p
+          v-if="mensaje"
+          class="error"
+        >
           {{ mensaje }}
         </p>
 
       </div>
 
 
-      <!-- ========================================= -->
-      <!-- PANEL ADMINISTRADOR -->
-      <!-- ========================================= -->
+
+      <!-- ================================================= -->
+      <!-- PANEL -->
+      <!-- ================================================= -->
 
       <div v-else>
 
+
+        <!-- ================================================= -->
         <!-- MENSAJE -->
+        <!-- ================================================= -->
 
         <div
           v-if="mensaje"
@@ -75,13 +119,17 @@
         </div>
 
 
-        <!-- ========================================= -->
+
+        <!-- ================================================= -->
         <!-- LIMITE DE VOTACIÓN -->
-        <!-- ========================================= -->
+        <!-- ================================================= -->
 
         <section class="seccion">
 
-          <h2>⏰ Límite de votación</h2>
+          <h2>
+            ⏰ Límite de votación
+          </h2>
+
 
           <p
             v-if="
@@ -90,27 +138,35 @@
               configuracion.fecha_limite
             "
           >
+
             Límite actual:
 
             <strong>
               {{ mostrarFecha(configuracion.fecha_limite) }}
             </strong>
+
           </p>
 
+
           <p v-else>
+
             <strong>
               La votación no tiene límite de fecha y hora.
             </strong>
+
           </p>
+
 
           <label>
             Selecciona fecha y hora:
           </label>
 
+
           <input
             v-model="fechaLimite"
             type="datetime-local"
           />
+
 
           <button
             class="btn azul"
@@ -118,6 +174,7 @@
           >
             💾 GUARDAR LÍMITE
           </button>
+
 
           <button
             class="btn naranja"
@@ -129,18 +186,23 @@
         </section>
 
 
-        <!-- ========================================= -->
-        <!-- CONTROL DE TODOS LOS VOTOS -->
-        <!-- ========================================= -->
+
+        <!-- ================================================= -->
+        <!-- CONTROL DE VOTOS -->
+        <!-- ================================================= -->
 
         <section class="seccion">
 
-          <h2>🔄 Control de votos</h2>
+          <h2>
+            🔄 Control de votos
+          </h2>
+
 
           <p>
-            Esta opción permitirá que todos los empleados vuelvan a votar
-            y eliminará los votos registrados.
+            Esta opción permitirá que todos los empleados
+            vuelvan a votar y eliminará los votos registrados.
           </p>
+
 
           <button
             class="btn rojo"
@@ -152,56 +214,178 @@
         </section>
 
 
-        <!-- ========================================= -->
-        <!-- RESTABLECER EMPLEADO -->
-        <!-- ========================================= -->
+
+        <!-- ================================================= -->
+        <!-- RESTABLECER EMPLEADO POR ÁREA -->
+        <!-- ================================================= -->
 
         <section class="seccion">
 
-          <h2>👤 Restablecer acceso de un empleado</h2>
+          <h2>
+            👤 Restablecer acceso de un empleado
+          </h2>
 
-          <select v-model="empleadoSeleccionado">
+
+          <p class="descripcion">
+
+            Selecciona primero el área y después
+            el empleado al que deseas restablecerle
+            el acceso.
+
+          </p>
+
+
+          <!-- =============================================== -->
+          <!-- SELECCIONAR ÁREA -->
+          <!-- =============================================== -->
+
+          <label>
+            Área:
+          </label>
+
+
+          <select
+            v-model="areaSeleccionada"
+            @change="empleadoSeleccionado = ''"
+          >
+
+            <option value="">
+              Selecciona un área
+            </option>
+
+
+            <option
+              v-for="area in areas"
+              :key="area"
+              :value="area"
+            >
+
+              {{ area }}
+
+            </option>
+
+          </select>
+
+
+
+          <!-- =============================================== -->
+          <!-- SELECCIONAR EMPLEADO -->
+          <!-- =============================================== -->
+
+          <label
+            v-if="areaSeleccionada"
+          >
+            Empleado:
+          </label>
+
+
+          <select
+            v-if="areaSeleccionada"
+            v-model="empleadoSeleccionado"
+          >
 
             <option value="">
               Selecciona un empleado
             </option>
 
+
             <option
-              v-for="empleado in empleados"
+              v-for="empleado in empleadosDeAreaSeleccionada"
               :key="empleado.id"
-              :value="empleado.id"
+              :value="String(empleado.id)"
             >
+
               {{ empleado.nombre }}
+              -
+              {{ empleado.expediente || 'Sin expediente' }}
+
             </option>
 
           </select>
+
+
+
+          <!-- =============================================== -->
+          <!-- INFORMACIÓN -->
+          <!-- =============================================== -->
+
+          <div
+            v-if="empleadoSeleccionadoObjeto"
+            class="empleado-seleccionado"
+          >
+
+            <strong>
+              Empleado seleccionado
+            </strong>
+
+
+            <p>
+              <b>Nombre:</b>
+              {{ empleadoSeleccionadoObjeto.nombre }}
+            </p>
+
+
+            <p>
+              <b>Expediente:</b>
+              {{ empleadoSeleccionadoObjeto.expediente || 'Sin expediente' }}
+            </p>
+
+
+            <p>
+              <b>Cargo:</b>
+              {{ empleadoSeleccionadoObjeto.cargo || 'Sin cargo' }}
+            </p>
+
+
+            <p>
+              <b>Área:</b>
+              {{ empleadoSeleccionadoObjeto.area || 'Sin área' }}
+            </p>
+
+          </div>
+
+
+
+          <!-- =============================================== -->
+          <!-- BOTÓN -->
+          <!-- =============================================== -->
 
           <button
             class="btn verde"
             @click="restablecerEmpleado"
             :disabled="!empleadoSeleccionado"
           >
+
             🔓 RESTABLECER ACCESO
+
           </button>
 
         </section>
 
 
-        <!-- ========================================= -->
+
+        <!-- ================================================= -->
         <!-- REPORTE -->
-        <!-- ========================================= -->
+        <!-- ================================================= -->
 
         <section class="seccion">
 
           <div class="titulo-seccion">
 
             <div>
-              <h2>📊 Reporte de votos</h2>
+
+              <h2>
+                📊 Reporte de votos
+              </h2>
+
 
               <p>
-                Solo el administrador puede consultar esta información.
+                El reporte muestra la información del votante,
+                candidato, fecha y datos del dispositivo utilizado.
               </p>
+
             </div>
+
 
             <div class="botones-reporte">
 
@@ -211,6 +395,7 @@
               >
                 📊 VER REPORTE
               </button>
+
 
               <button
                 class="btn verde boton-reporte"
@@ -225,7 +410,10 @@
           </div>
 
 
+
+          <!-- ================================================= -->
           <!-- TABLA -->
+          <!-- ================================================= -->
 
           <div
             v-if="reporte.length"
@@ -237,12 +425,66 @@
               <thead>
 
                 <tr>
-                  <th>Empleado</th>
-                  <th>Cargo</th>
-                  <th>Área</th>
-                  <th>Votó por</th>
-                  <th>Cargo del candidato</th>
-                  <th>Área del candidato</th>
+
+                  <th>
+                    Expediente de quien votó
+                  </th>
+
+
+                  <th>
+                    Empleado
+                  </th>
+
+
+                  <th>
+                    Cargo
+                  </th>
+
+
+                  <th>
+                    Área
+                  </th>
+
+
+                  <th>
+                    Expediente del candidato
+                  </th>
+
+
+                  <th>
+                    Votó por
+                  </th>
+
+
+                  <th>
+                    Cargo del candidato
+                  </th>
+
+
+                  <th>
+                    Área del candidato
+                  </th>
+
+
+                  <th>
+                    Fecha y hora del voto
+                  </th>
+
+
+                  <th>
+                    Dispositivo
+                  </th>
+
+
+                  <th>
+                    Navegador
+                  </th>
+
+
+                  <th>
+                    Sistema operativo
+                  </th>
+
                 </tr>
 
               </thead>
@@ -255,30 +497,140 @@
                   :key="fila.id"
                 >
 
-                  <td>
-                    {{ fila.empleado_nombre }}
+                  <td class="expediente">
+
+                    {{
+                      fila.empleado_expediente ||
+                      'Sin expediente'
+                    }}
+
                   </td>
 
-                  <td>
-                    {{ fila.empleado_cargo }}
-                  </td>
 
                   <td>
-                    {{ fila.empleado_area || 'Sin área' }}
+
+                    {{
+                      fila.empleado_nombre ||
+                      'Sin nombre'
+                    }}
+
                   </td>
 
+
                   <td>
+
+                    {{
+                      fila.empleado_cargo ||
+                      'Sin cargo'
+                    }}
+
+                  </td>
+
+
+                  <td>
+
+                    {{
+                      fila.empleado_area ||
+                      'Sin área'
+                    }}
+
+                  </td>
+
+
+                  <td class="expediente">
+
+                    {{
+                      fila.candidato_expediente ||
+                      'Sin expediente'
+                    }}
+
+                  </td>
+
+
+                  <td>
+
                     <strong>
-                      {{ fila.candidato_nombre }}
+                      {{
+                        fila.candidato_nombre ||
+                        'Sin candidato'
+                      }}
                     </strong>
+
                   </td>
 
-                  <td>
-                    {{ fila.candidato_cargo || 'Sin cargo' }}
-                  </td>
 
                   <td>
-                    {{ fila.candidato_area || 'Sin área' }}
+
+                    {{
+                      fila.candidato_cargo ||
+                      'Sin cargo'
+                    }}
+
+                  </td>
+
+
+                  <td>
+
+                    {{
+                      fila.candidato_area ||
+                      'Sin área'
+                    }}
+
+                  </td>
+
+
+                  <td class="fecha-voto">
+
+                    {{
+                      fila.fecha_voto
+                        ? mostrarFechaVoto(
+                            fila.fecha_voto
+                          )
+                        : 'Sin fecha'
+                    }}
+
+                  </td>
+
+
+                  <!-- ======================================= -->
+                  <!-- DISPOSITIVO -->
+                  <!-- ======================================= -->
+
+                  <td class="dispositivo">
+
+                    {{
+                      fila.dispositivo ||
+                      'No disponible'
+                    }}
+
+                  </td>
+
+
+                  <!-- ======================================= -->
+                  <!-- NAVEGADOR -->
+                  <!-- ======================================= -->
+
+                  <td class="dispositivo">
+
+                    {{
+                      fila.navegador ||
+                      'No disponible'
+                    }}
+
+                  </td>
+
+
+                  <!-- ======================================= -->
+                  <!-- SISTEMA OPERATIVO -->
+                  <!-- ======================================= -->
+
+                  <td class="dispositivo">
+
+                    {{
+                      fila.sistema_operativo ||
+                      'No disponible'
+                    }}
+
                   </td>
 
                 </tr>
@@ -290,19 +642,27 @@
           </div>
 
 
+
+          <!-- ================================================= -->
+          <!-- SIN DATOS -->
+          <!-- ================================================= -->
+
           <div
             v-else
             class="sin-datos"
           >
+
             No hay votos registrados todavía.
+
           </div>
 
         </section>
 
 
-        <!-- ========================================= -->
+
+        <!-- ================================================= -->
         <!-- PODIO -->
-        <!-- ========================================= -->
+        <!-- ================================================= -->
 
         <section class="seccion">
 
@@ -310,13 +670,17 @@
 
             <div>
 
-              <h2>🏆 Podio de ganadores</h2>
+              <h2>
+                🏆 Podio de ganadores
+              </h2>
+
 
               <p>
                 Las tres personas con más votos.
               </p>
 
             </div>
+
 
             <button
               class="btn amarillo boton-reporte"
@@ -328,7 +692,6 @@
           </div>
 
 
-          <!-- PODIO -->
 
           <div
             v-if="podio.length"
@@ -385,7 +748,13 @@
                 {{ persona.votos }}
 
                 <small>
-                  {{ persona.votos === 1 ? 'voto' : 'votos' }}
+
+                  {{
+                    persona.votos === 1
+                      ? 'voto'
+                      : 'votos'
+                  }}
+
                 </small>
 
               </div>
@@ -399,7 +768,10 @@
             v-else
             class="sin-datos"
           >
-            Todavía no hay votos suficientes para mostrar el podio.
+
+            Todavía no hay votos suficientes
+            para mostrar el podio.
+
           </div>
 
         </section>
@@ -407,22 +779,32 @@
       </div>
 
     </div>
+
   </div>
+
 </template>
+
 
 
 <script setup>
 
 import * as XLSX from 'xlsx'
 
+
+// ==================================================
+// SUPABASE
+// ==================================================
+
 const supabase = useSupabase()
 
 
-// ==========================================
+
+// ==================================================
 // VARIABLES
-// ==========================================
+// ==================================================
 
 const usuario = ref('')
+
 const password = ref('')
 
 const sesion = ref(false)
@@ -439,21 +821,114 @@ const empleados = ref([])
 
 const empleadoSeleccionado = ref('')
 
+const areaSeleccionada = ref('')
+
 const reporte = ref([])
 
 const podio = ref([])
 
 
-// ==========================================
+
+// ==================================================
+// AREAS
+// ==================================================
+
+const areas = computed(() => {
+
+  const lista = empleados.value
+    .map(empleado =>
+      empleado.area?.trim()
+    )
+    .filter(Boolean)
+
+
+  return [
+    ...new Set(lista)
+  ].sort(
+    (a, b) =>
+      a.localeCompare(
+        b,
+        'es',
+        {
+          sensitivity: 'base'
+        }
+      )
+  )
+
+})
+
+
+
+// ==================================================
+// EMPLEADOS DE ÁREA SELECCIONADA
+// ==================================================
+
+const empleadosDeAreaSeleccionada = computed(() => {
+
+  if (!areaSeleccionada.value) {
+
+    return []
+
+  }
+
+
+  return empleados.value
+
+    .filter(empleado =>
+      (empleado.area || '').trim() ===
+      areaSeleccionada.value
+    )
+
+    .sort(
+      (a, b) =>
+        (a.nombre || '').localeCompare(
+          b.nombre || '',
+          'es',
+          {
+            sensitivity: 'base'
+          }
+        )
+    )
+
+})
+
+
+
+// ==================================================
+// EMPLEADO SELECCIONADO
+// ==================================================
+
+const empleadoSeleccionadoObjeto = computed(() => {
+
+  if (!empleadoSeleccionado.value) {
+
+    return null
+
+  }
+
+
+  return empleados.value.find(
+    empleado =>
+      String(empleado.id) ===
+      String(empleadoSeleccionado.value)
+  ) || null
+
+})
+
+
+
+// ==================================================
 // LOGIN
-// ==========================================
+// ==================================================
 
 async function entrar() {
 
   mensaje.value = ''
 
+
   const usuarioIngresado =
     usuario.value.trim()
+
 
   const passwordIngresada =
     password.value
@@ -468,6 +943,7 @@ async function entrar() {
       'Escribe usuario y contraseña'
 
     return
+
   }
 
 
@@ -512,6 +988,7 @@ async function entrar() {
       'Error al conectar con Supabase'
 
     return
+
   }
 
 
@@ -521,6 +998,7 @@ async function entrar() {
       'Usuario o contraseña incorrectos'
 
     return
+
   }
 
 
@@ -533,10 +1011,9 @@ async function entrar() {
       'Usuario o contraseña incorrectos'
 
     return
+
   }
 
-
-  // LOGIN CORRECTO
 
   usuario.value =
     data.usuario
@@ -553,9 +1030,10 @@ async function entrar() {
 }
 
 
-// ==========================================
+
+// ==================================================
 // CERRAR SESIÓN
-// ==========================================
+// ==================================================
 
 function salir() {
 
@@ -571,12 +1049,19 @@ function salir() {
 
   podio.value = []
 
+  empleados.value = []
+
+  areaSeleccionada.value = ''
+
+  empleadoSeleccionado.value = ''
+
 }
 
 
-// ==========================================
-// CARGAR CONFIGURACIÓN
-// ==========================================
+
+// ==================================================
+// CONFIGURACIÓN
+// ==================================================
 
 async function cargarConfiguracion() {
 
@@ -605,6 +1090,7 @@ async function cargarConfiguracion() {
       'No se pudo cargar la configuración'
 
     return
+
   }
 
 
@@ -625,6 +1111,7 @@ async function cargarConfiguracion() {
     const year =
       fecha.getFullYear()
 
+
     const month =
       String(
         fecha.getMonth() + 1
@@ -632,6 +1119,7 @@ async function cargarConfiguracion() {
         2,
         '0'
       )
+
 
     const day =
       String(
@@ -641,6 +1129,7 @@ async function cargarConfiguracion() {
         '0'
       )
 
+
     const hours =
       String(
         fecha.getHours()
@@ -648,6 +1137,7 @@ async function cargarConfiguracion() {
         2,
         '0'
       )
+
 
     const minutes =
       String(
@@ -661,7 +1151,8 @@ async function cargarConfiguracion() {
     fechaLimite.value =
       `${year}-${month}-${day}T${hours}:${minutes}`
 
-  } else {
+  }
+  else {
 
     fechaLimite.value = ''
 
@@ -670,9 +1161,10 @@ async function cargarConfiguracion() {
 }
 
 
-// ==========================================
+
+// ==================================================
 // GUARDAR LIMITE
-// ==========================================
+// ==================================================
 
 async function guardarLimite() {
 
@@ -685,6 +1177,7 @@ async function guardarLimite() {
       'Selecciona una fecha y hora'
 
     return
+
   }
 
 
@@ -704,6 +1197,7 @@ async function guardarLimite() {
       'La fecha no es válida'
 
     return
+
   }
 
 
@@ -716,6 +1210,7 @@ async function guardarLimite() {
       'La fecha debe ser posterior a la fecha y hora actual'
 
     return
+
   }
 
 
@@ -749,6 +1244,7 @@ async function guardarLimite() {
       'No se pudo guardar el límite'
 
     return
+
   }
 
 
@@ -761,9 +1257,10 @@ async function guardarLimite() {
 }
 
 
-// ==========================================
+
+// ==================================================
 // QUITAR LIMITE
-// ==========================================
+// ==================================================
 
 async function quitarLimite() {
 
@@ -807,6 +1304,7 @@ async function quitarLimite() {
       'No se pudo quitar el límite'
 
     return
+
   }
 
 
@@ -822,9 +1320,10 @@ async function quitarLimite() {
 }
 
 
-// ==========================================
+
+// ==================================================
 // CARGAR EMPLEADOS
-// ==========================================
+// ==================================================
 
 async function cargarEmpleados() {
 
@@ -836,11 +1335,14 @@ async function cargarEmpleados() {
     .from('empleados')
 
     .select(
-      'id, nombre, cargo, area'
+      'id, expediente, nombre, cargo, area'
     )
 
     .order(
-      'nombre'
+      'area',
+      {
+        ascending: true
+      }
     )
 
 
@@ -852,6 +1354,7 @@ async function cargarEmpleados() {
       'No se pudieron cargar los empleados'
 
     return
+
   }
 
 
@@ -861,9 +1364,10 @@ async function cargarEmpleados() {
 }
 
 
-// ==========================================
+
+// ==================================================
 // RESTABLECER TODOS
-// ==========================================
+// ==================================================
 
 async function restablecerTodos() {
 
@@ -908,6 +1412,7 @@ async function restablecerTodos() {
       'No se pudieron restablecer los empleados'
 
     return
+
   }
 
 
@@ -934,6 +1439,7 @@ async function restablecerTodos() {
       'Los empleados fueron restablecidos, pero hubo un problema al borrar los votos'
 
     return
+
   }
 
 
@@ -948,9 +1454,10 @@ async function restablecerTodos() {
 }
 
 
-// ==========================================
+
+// ==================================================
 // RESTABLECER EMPLEADO
-// ==========================================
+// ==================================================
 
 async function restablecerEmpleado() {
 
@@ -962,11 +1469,32 @@ async function restablecerEmpleado() {
       'Selecciona un empleado'
 
     return
+
   }
 
 
-  const id =
-    empleadoSeleccionado.value
+  const empleado =
+    empleadoSeleccionadoObjeto.value
+
+
+  if (!empleado) {
+
+    mensaje.value =
+      'No se encontró el empleado seleccionado'
+
+    return
+
+  }
+
+
+  const confirmar =
+    confirm(
+      `¿Quieres restablecer el acceso de ${empleado.nombre} (expediente ${empleado.expediente})?`
+    )
+
+
+  if (!confirmar)
+    return
 
 
   const {
@@ -987,33 +1515,43 @@ async function restablecerEmpleado() {
 
     .eq(
       'id',
-      id
+      empleado.id
     )
 
 
   if (error) {
 
-    console.error(error)
+    console.error(
+      'Error restableciendo empleado:',
+      error
+    )
 
     mensaje.value =
       'No se pudo restablecer el empleado'
 
     return
+
   }
 
 
   mensaje.value =
-    '✅ Acceso restablecido correctamente'
+    `✅ Acceso de ${empleado.nombre} restablecido correctamente`
 
 
   empleadoSeleccionado.value = ''
 
+  areaSeleccionada.value = ''
+
+
+  await cargarEmpleados()
+
 }
 
 
-// ==========================================
-// REPORTE
-// ==========================================
+
+// ==================================================
+// CARGAR REPORTE
+// ==================================================
 
 async function cargarReporte() {
 
@@ -1035,22 +1573,50 @@ async function cargarReporte() {
 
       candidato_id,
 
+      fecha_hora,
+
+      created_at,
+
+      dispositivo_voto,
+
+      navegador_voto,
+
+      sistema_voto,
+
+      dispositivo,
+
+      sistema_operativo,
+
+      navegador,
+
       empleado:empleados!votos_empleado_id_fkey(
+
+        expediente,
+
         nombre,
+
         cargo,
+
         area
+
       ),
 
       candidato:empleados!votos_candidato_id_fkey(
+
+        expediente,
+
         nombre,
+
         cargo,
+
         area
+
       )
 
     `)
 
     .order(
-      'id',
+      'created_at',
       {
         ascending: false
       }
@@ -1059,12 +1625,16 @@ async function cargarReporte() {
 
   if (error) {
 
-    console.error(error)
+    console.error(
+      'Error cargando reporte:',
+      error
+    )
 
     mensaje.value =
-      'No se pudo cargar el reporte'
+      `No se pudo cargar el reporte: ${error.message}`
 
     return
+
   }
 
 
@@ -1075,6 +1645,20 @@ async function cargarReporte() {
         id:
           voto.id,
 
+
+        fecha_voto:
+          voto.fecha_hora ||
+          voto.created_at ||
+          '',
+
+
+        // ========================================
+        // VOTANTE
+        // ========================================
+
+        empleado_expediente:
+          voto.empleado?.expediente || '',
+
         empleado_nombre:
           voto.empleado?.nombre || '',
 
@@ -1084,6 +1668,14 @@ async function cargarReporte() {
         empleado_area:
           voto.empleado?.area || '',
 
+
+        // ========================================
+        // CANDIDATO
+        // ========================================
+
+        candidato_expediente:
+          voto.candidato?.expediente || '',
+
         candidato_nombre:
           voto.candidato?.nombre || '',
 
@@ -1091,7 +1683,37 @@ async function cargarReporte() {
           voto.candidato?.cargo || '',
 
         candidato_area:
-          voto.candidato?.area || ''
+          voto.candidato?.area || '',
+
+
+        // ========================================
+        // DISPOSITIVO
+        // ========================================
+
+        dispositivo:
+          voto.dispositivo_voto ||
+          voto.dispositivo ||
+          'No disponible',
+
+
+        // ========================================
+        // NAVEGADOR
+        // ========================================
+
+        navegador:
+          voto.navegador_voto ||
+          voto.navegador ||
+          'No disponible',
+
+
+        // ========================================
+        // SISTEMA OPERATIVO
+        // ========================================
+
+        sistema_operativo:
+          voto.sistema_voto ||
+          voto.sistema_operativo ||
+          'No disponible'
 
       }))
 
@@ -1108,9 +1730,10 @@ async function cargarReporte() {
 }
 
 
-// ==========================================
-// DESCARGAR REPORTE EN EXCEL
-// ==========================================
+
+// ==================================================
+// DESCARGAR EXCEL
+// ==================================================
 
 function descargarExcel() {
 
@@ -1120,40 +1743,76 @@ function descargarExcel() {
       'Primero debes cargar el reporte'
 
     return
+
   }
 
 
-  // Convertir los datos del reporte
-  // al formato que utilizará Excel
-
   const datosExcel =
-    reporte.value.map(fila => ({
+    reporte.value.map(
+      fila => ({
 
-      'Empleado':
-        fila.empleado_nombre,
-
-      'Cargo':
-        fila.empleado_cargo,
-
-      'Área':
-        fila.empleado_area ||
-        'Sin área',
-
-      'Votó por':
-        fila.candidato_nombre,
-
-      'Cargo del candidato':
-        fila.candidato_cargo ||
-        'Sin cargo',
-
-      'Área del candidato':
-        fila.candidato_area ||
-        'Sin área'
-
-    }))
+        'Expediente de quien votó':
+          fila.empleado_expediente ||
+          'Sin expediente',
 
 
-  // Crear la hoja
+        'Empleado':
+          fila.empleado_nombre,
+
+
+        'Cargo':
+          fila.empleado_cargo,
+
+
+        'Área':
+          fila.empleado_area ||
+          'Sin área',
+
+
+        'Expediente del candidato':
+          fila.candidato_expediente ||
+          'Sin expediente',
+
+
+        'Votó por':
+          fila.candidato_nombre,
+
+
+        'Cargo del candidato':
+          fila.candidato_cargo ||
+          'Sin cargo',
+
+
+        'Área del candidato':
+          fila.candidato_area ||
+          'Sin área',
+
+
+        'Fecha y hora del voto':
+          fila.fecha_voto
+            ? mostrarFechaVoto(
+                fila.fecha_voto
+              )
+            : 'Sin fecha',
+
+
+        'Dispositivo':
+          fila.dispositivo ||
+          'No disponible',
+
+
+        'Navegador':
+          fila.navegador ||
+          'No disponible',
+
+
+        'Sistema operativo':
+          fila.sistema_operativo ||
+          'No disponible'
+
+      })
+    )
+
 
   const hoja =
     XLSX.utils.json_to_sheet(
@@ -1161,44 +1820,27 @@ function descargarExcel() {
     )
 
 
-  // Ajustar ancho de columnas
-
   hoja['!cols'] = [
 
-    {
-      wch: 30
-    },
-
-    {
-      wch: 30
-    },
-
-    {
-      wch: 25
-    },
-
-    {
-      wch: 30
-    },
-
-    {
-      wch: 35
-    },
-
-    {
-      wch: 25
-    }
+    { wch: 28 },
+    { wch: 30 },
+    { wch: 30 },
+    { wch: 25 },
+    { wch: 28 },
+    { wch: 30 },
+    { wch: 35 },
+    { wch: 25 },
+    { wch: 30 },
+    { wch: 28 },
+    { wch: 25 },
+    { wch: 25 }
 
   ]
 
 
-  // Crear libro de Excel
-
   const libro =
     XLSX.utils.book_new()
 
-
-  // Agregar hoja
 
   XLSX.utils.book_append_sheet(
     libro,
@@ -1206,8 +1848,6 @@ function descargarExcel() {
     'Reporte de votos'
   )
 
-
-  // Descargar archivo
 
   XLSX.writeFile(
     libro,
@@ -1221,9 +1861,10 @@ function descargarExcel() {
 }
 
 
-// ==========================================
+
+// ==================================================
 // PODIO
-// ==========================================
+// ==================================================
 
 async function cargarPodio() {
 
@@ -1250,6 +1891,7 @@ async function cargarPodio() {
       'No se pudo cargar el podio'
 
     return
+
   }
 
 
@@ -1281,9 +1923,7 @@ async function cargarPodio() {
       )
 
 
-  if (
-    !ids.length
-  ) {
+  if (!ids.length) {
 
     podio.value = []
 
@@ -1291,6 +1931,7 @@ async function cargarPodio() {
       'Todavía no hay votos'
 
     return
+
   }
 
 
@@ -1302,7 +1943,7 @@ async function cargarPodio() {
     .from('empleados')
 
     .select(
-      'id, nombre, cargo, area'
+      'id, expediente, nombre, cargo, area'
     )
 
     .in(
@@ -1321,6 +1962,7 @@ async function cargarPodio() {
       'No se pudieron cargar los candidatos'
 
     return
+
   }
 
 
@@ -1353,14 +1995,16 @@ async function cargarPodio() {
 }
 
 
-// ==========================================
+
+// ==================================================
 // FORMATO FECHA
-// ==========================================
+// ==================================================
 
 function mostrarFecha(fecha) {
 
   if (!fecha)
     return ''
+
 
   return new Date(fecha)
     .toLocaleString(
@@ -1373,7 +2017,31 @@ function mostrarFecha(fecha) {
 
 }
 
+
+
+// ==================================================
+// FORMATO FECHA DEL VOTO
+// ==================================================
+
+function mostrarFechaVoto(fecha) {
+
+  if (!fecha)
+    return 'Sin fecha'
+
+
+  return new Date(fecha)
+    .toLocaleString(
+      'es-MX',
+      {
+        dateStyle: 'short',
+        timeStyle: 'medium'
+      }
+    )
+
+}
+
 </script>
+
 
 
 <style scoped>
@@ -1417,7 +2085,7 @@ function mostrarFecha(fecha) {
     100%;
 
   max-width:
-    1200px;
+    1500px;
 
   margin:
     auto;
@@ -1425,9 +2093,9 @@ function mostrarFecha(fecha) {
 }
 
 
-/* ========================================= */
+/* ================================================= */
 /* ENCABEZADO */
-/* ========================================= */
+/* ================================================= */
 
 .encabezado {
 
@@ -1477,9 +2145,9 @@ function mostrarFecha(fecha) {
 }
 
 
-/* ========================================= */
+/* ================================================= */
 /* LOGIN */
-/* ========================================= */
+/* ================================================= */
 
 .login {
 
@@ -1529,9 +2197,9 @@ function mostrarFecha(fecha) {
 }
 
 
-/* ========================================= */
+/* ================================================= */
 /* SECCIONES */
-/* ========================================= */
+/* ================================================= */
 
 .seccion {
 
@@ -1575,9 +2243,69 @@ function mostrarFecha(fecha) {
 }
 
 
-/* ========================================= */
-/* TITULO */
-/* ========================================= */
+.descripcion {
+
+  background:
+    #f8fafc;
+
+  padding:
+    12px;
+
+  border-radius:
+    8px;
+
+}
+
+
+/* ================================================= */
+/* EMPLEADO SELECCIONADO */
+/* ================================================= */
+
+.empleado-seleccionado {
+
+  margin-top:
+    15px;
+
+  padding:
+    18px;
+
+  background:
+    #eff6ff;
+
+  border:
+    1px solid #bfdbfe;
+
+  border-radius:
+    10px;
+
+}
+
+
+.empleado-seleccionado strong {
+
+  display:
+    block;
+
+  margin-bottom:
+    10px;
+
+  color:
+    #1d4ed8;
+
+}
+
+
+.empleado-seleccionado p {
+
+  margin:
+    7px 0;
+
+}
+
+
+/* ================================================= */
+/* TITULOS */
+/* ================================================= */
 
 .titulo-seccion {
 
@@ -1612,7 +2340,9 @@ function mostrarFecha(fecha) {
 }
 
 
-/* BOTONES DEL REPORTE */
+/* ================================================= */
+/* BOTONES */
+/* ================================================= */
 
 .botones-reporte {
 
@@ -1634,25 +2364,10 @@ function mostrarFecha(fecha) {
     auto;
 
   min-width:
-    160px;
-
-}
-
-
-.botones-reporte .btn {
-
-  width:
-    auto;
-
-  min-width:
     180px;
 
 }
 
-
-/* ========================================= */
-/* INPUTS */
-/* ========================================= */
 
 input,
 select {
@@ -1691,10 +2406,6 @@ label {
 
 }
 
-
-/* ========================================= */
-/* BOTONES */
-/* ========================================= */
 
 button {
 
@@ -1803,9 +2514,9 @@ button:disabled {
 }
 
 
-/* ========================================= */
+/* ================================================= */
 /* MENSAJES */
-/* ========================================= */
+/* ================================================= */
 
 .mensaje {
 
@@ -1838,9 +2549,9 @@ button:disabled {
 }
 
 
-/* ========================================= */
+/* ================================================= */
 /* TABLA */
-/* ========================================= */
+/* ================================================= */
 
 .tabla-contenedor {
 
@@ -1849,6 +2560,9 @@ button:disabled {
 
   margin-top:
     20px;
+
+  border-radius:
+    10px;
 
 }
 
@@ -1859,7 +2573,7 @@ table {
     100%;
 
   min-width:
-    950px;
+    1900px;
 
   border-collapse:
     collapse;
@@ -1907,9 +2621,51 @@ tbody tr:hover {
 }
 
 
-/* ========================================= */
+.expediente {
+
+  font-weight:
+    bold;
+
+  color:
+    #2563eb;
+
+  white-space:
+    nowrap;
+
+}
+
+
+.fecha-voto {
+
+  white-space:
+    nowrap;
+
+  font-weight:
+    bold;
+
+  color:
+    #176b3a;
+
+}
+
+
+.dispositivo {
+
+  color:
+    #475569;
+
+  font-size:
+    14px;
+
+  min-width:
+    160px;
+
+}
+
+
+/* ================================================= */
 /* SIN DATOS */
-/* ========================================= */
+/* ================================================= */
 
 .sin-datos {
 
@@ -1934,9 +2690,9 @@ tbody tr:hover {
 }
 
 
-/* ========================================= */
+/* ================================================= */
 /* PODIO */
-/* ========================================= */
+/* ================================================= */
 
 .podio {
 
@@ -2097,9 +2853,9 @@ tbody tr:hover {
 }
 
 
-/* ========================================= */
+/* ================================================= */
 /* CELULAR */
-/* ========================================= */
+/* ================================================= */
 
 @media (max-width: 700px) {
 
@@ -2161,14 +2917,6 @@ tbody tr:hover {
 
 
   .botones-reporte .btn {
-
-    width:
-      100%;
-
-  }
-
-
-  .boton-reporte {
 
     width:
       100%;
