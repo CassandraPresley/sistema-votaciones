@@ -1,11 +1,12 @@
 <template>
+
   <div class="pantalla">
 
     <div class="tarjeta">
 
-      <!-- ============================= -->
+      <!-- ================================= -->
       <!-- LOGIN -->
-      <!-- ============================= -->
+      <!-- ================================= -->
 
       <div v-if="!empleado && !votoRegistrado">
 
@@ -19,6 +20,16 @@
           inputmode="numeric"
           placeholder="Número de expediente"
           autocomplete="off"
+        />
+
+        <p>Ingresa tu token</p>
+
+        <input
+          v-model="token"
+          type="password"
+          inputmode="numeric"
+          placeholder="Token"
+          autocomplete="off"
           @keyup.enter="entrar"
         />
 
@@ -26,7 +37,7 @@
           @click="entrar"
           :disabled="cargando"
         >
-          {{ cargando ? 'BUSCANDO...' : 'ENTRAR' }}
+          {{ cargando ? 'VALIDANDO...' : 'ENTRAR' }}
         </button>
 
         <p
@@ -39,9 +50,9 @@
       </div>
 
 
-      <!-- ============================= -->
-      <!-- DATOS DEL EMPLEADO -->
-      <!-- ============================= -->
+      <!-- ================================= -->
+      <!-- EMPLEADO -->
+      <!-- ================================= -->
 
       <div
         v-if="empleado && !votoRegistrado"
@@ -73,7 +84,13 @@
 
         </div>
 
+
         <hr>
+
+
+        <!-- ================================= -->
+        <!-- CANDIDATOS -->
+        <!-- ================================= -->
 
         <h3>
           CANDIDATOS DE TU ÁREA
@@ -85,16 +102,13 @@
         </p>
 
 
-        <!-- ============================= -->
-        <!-- CANDIDATOS -->
-        <!-- ============================= -->
-
         <div
           v-if="cargandoCandidatos"
           class="cargando"
         >
           Cargando candidatos...
         </div>
+
 
         <div
           v-else-if="candidatos.length === 0"
@@ -103,6 +117,7 @@
           No hay candidatos disponibles
           en tu área.
         </div>
+
 
         <div
           v-else
@@ -133,9 +148,9 @@
         </div>
 
 
-        <!-- ============================= -->
-        <!-- CONFIRMAR VOTO -->
-        <!-- ============================= -->
+        <!-- ================================= -->
+        <!-- VOTAR -->
+        <!-- ================================= -->
 
         <button
           class="boton-votar"
@@ -165,9 +180,9 @@
       </div>
 
 
-      <!-- ============================= -->
+      <!-- ================================= -->
       <!-- VOTO REGISTRADO -->
-      <!-- ============================= -->
+      <!-- ================================= -->
 
       <div
         v-if="votoRegistrado"
@@ -195,196 +210,44 @@
     </div>
 
   </div>
+
 </template>
 
 
 <script setup>
 
-// ==========================================
-// SUPABASE
-// ==========================================
-
 const supabase = useSupabase()
 
 
 // ==========================================
-// VARIABLES
+// LOGIN
 // ==========================================
 
 const expediente = ref('')
+const token = ref('')
 
 const empleado = ref(null)
 
-const candidatos = ref([])
 
+// ==========================================
+// VOTACIÓN
+// ==========================================
+
+const candidatos = ref([])
 const candidatoSeleccionado = ref(null)
 
-const mensaje = ref('')
-
-const cargando = ref(false)
-
-const cargandoCandidatos = ref(false)
-
 const votando = ref(false)
+const cargando = ref(false)
+const cargandoCandidatos = ref(false)
 
 const votoRegistrado = ref(false)
 
 
 // ==========================================
-// OBTENER INFORMACIÓN DEL DISPOSITIVO
+// MENSAJES
 // ==========================================
 
-function obtenerDispositivo() {
-
-  if (typeof navigator === 'undefined') {
-
-    return {
-      dispositivo: 'Desconocido',
-      sistema_operativo: 'Desconocido',
-      navegador: 'Desconocido'
-    }
-
-  }
-
-
-  const userAgent =
-    navigator.userAgent || ''
-
-
-  // ========================================
-  // SISTEMA OPERATIVO
-  // ========================================
-
-  let sistemaOperativo =
-    'Desconocido'
-
-
-  if (/Windows NT/i.test(userAgent)) {
-
-    sistemaOperativo = 'Windows'
-
-  }
-
-  else if (/Android/i.test(userAgent)) {
-
-    sistemaOperativo = 'Android'
-
-  }
-
-  else if (
-    /iPhone|iPad|iPod/i.test(userAgent)
-  ) {
-
-    sistemaOperativo = 'iOS'
-
-  }
-
-  else if (/Mac OS X/i.test(userAgent)) {
-
-    sistemaOperativo = 'macOS'
-
-  }
-
-  else if (/Linux/i.test(userAgent)) {
-
-    sistemaOperativo = 'Linux'
-
-  }
-
-
-  // ========================================
-  // NAVEGADOR
-  // ========================================
-
-  let navegador =
-    'Desconocido'
-
-
-  if (/Edg\//i.test(userAgent)) {
-
-    navegador = 'Microsoft Edge'
-
-  }
-
-  else if (/OPR\//i.test(userAgent)) {
-
-    navegador = 'Opera'
-
-  }
-
-  else if (/Chrome\//i.test(userAgent)) {
-
-    navegador = 'Google Chrome'
-
-  }
-
-  else if (/Firefox\//i.test(userAgent)) {
-
-    navegador = 'Mozilla Firefox'
-
-  }
-
-  else if (
-    /Safari\//i.test(userAgent) &&
-    !/Chrome\//i.test(userAgent)
-  ) {
-
-    navegador = 'Safari'
-
-  }
-
-
-  // ========================================
-  // DISPOSITIVO
-  // ========================================
-
-  let dispositivo =
-    'Computadora'
-
-
-  if (/iPhone/i.test(userAgent)) {
-
-    dispositivo = 'iPhone'
-
-  }
-
-  else if (/iPad/i.test(userAgent)) {
-
-    dispositivo = 'iPad'
-
-  }
-
-  else if (/Android/i.test(userAgent)) {
-
-    dispositivo = 'Dispositivo Android'
-
-  }
-
-  else if (/Macintosh/i.test(userAgent)) {
-
-    dispositivo = 'Mac'
-
-  }
-
-  else if (/Windows/i.test(userAgent)) {
-
-    dispositivo = 'Computadora Windows'
-
-  }
-
-
-  return {
-
-    dispositivo,
-
-    sistema_operativo:
-      sistemaOperativo,
-
-    navegador
-
-  }
-
-}
+const mensaje = ref('')
 
 
 // ==========================================
@@ -395,21 +258,11 @@ async function entrar() {
 
   mensaje.value = ''
 
-  empleado.value = null
-
-  candidatos.value = []
-
-  candidatoSeleccionado.value = null
-
-  votoRegistrado.value = false
-
-
-  // ========================================
-  // VALIDAR EXPEDIENTE
-  // ========================================
-
   const numeroExpediente =
     expediente.value.trim()
+
+  const tokenIngresado =
+    token.value.trim()
 
 
   if (!numeroExpediente) {
@@ -418,166 +271,89 @@ async function entrar() {
       'Ingresa tu número de expediente'
 
     return
+  }
 
+
+  if (!tokenIngresado) {
+
+    mensaje.value =
+      'Ingresa tu token'
+
+    return
   }
 
 
   cargando.value = true
 
 
-  // ========================================
-  // BUSCAR EMPLEADO
-  // ========================================
+  try {
 
-  const {
-    data,
-    error
-  } = await supabase
+    /*
+     * Login mediante nuestro endpoint:
+     *
+     * POST /api/login
+     *
+     * El endpoint valida el token
+     * en el servidor.
+     */
 
-    .from('empleados')
+    const respuesta = await $fetch(
+      '/api/login',
+      {
+        method: 'POST',
 
-    .select(`
-      id,
-      expediente,
-      nombre,
-      cargo,
-      area,
-      ya_voto,
-      acceso_bloqueado
-    `)
+        body: {
+          expediente:
+            numeroExpediente,
 
-    .eq(
-      'expediente',
-      numeroExpediente
+          token:
+            tokenIngresado
+        }
+      }
     )
 
-    .maybeSingle()
+
+    if (!respuesta?.ok) {
+
+      mensaje.value =
+        respuesta?.mensaje ||
+        'Expediente o token incorrecto.'
+
+      return
+    }
 
 
-  cargando.value = false
+    // Login correcto
 
+    empleado.value =
+      respuesta.empleado
 
-  // ========================================
-  // ERROR SUPABASE
-  // ========================================
+    token.value = ''
 
-  if (error) {
+    mensaje.value = ''
+
+    candidatoSeleccionado.value = null
+
+    await cargarCandidatos()
+
+  } catch (error) {
 
     console.error(
-      'ERROR EMPLEADO:',
+      'ERROR EN LOGIN:',
       error
     )
 
     mensaje.value =
-      `Error de base de datos: ${error.message}`
+      error?.data?.mensaje ||
+      error?.data?.statusMessage ||
+      error?.message ||
+      'No fue posible iniciar sesión.'
 
-    return
+  } finally {
 
-  }
-
-
-  // ========================================
-  // NO EXISTE
-  // ========================================
-
-  if (!data) {
-
-    mensaje.value =
-      '❌ Número de expediente no encontrado'
-
-    return
+    cargando.value = false
 
   }
-
-
-  // ========================================
-  // YA VOTÓ / BLOQUEADO
-  // ========================================
-
-  if (
-    data.ya_voto === true ||
-    data.acceso_bloqueado === true
-  ) {
-
-    mensaje.value =
-      '⚠️ Este empleado ya realizó su voto. Su acceso está bloqueado.'
-
-    return
-
-  }
-
-
-  // ========================================
-  // COMPROBAR CONFIGURACIÓN
-  // ========================================
-
-  const {
-    data: config,
-    error: errorConfig
-  } = await supabase
-
-    .from('configuracion')
-
-    .select(`
-      limite_activo,
-      fecha_limite
-    `)
-
-    .eq(
-      'id',
-      1
-    )
-
-    .maybeSingle()
-
-
-  if (errorConfig) {
-
-    console.error(
-      'ERROR CONFIGURACION:',
-      errorConfig
-    )
-
-    mensaje.value =
-      `Error de configuración: ${errorConfig.message}`
-
-    return
-
-  }
-
-
-  // ========================================
-  // COMPROBAR LÍMITE
-  // ========================================
-
-  if (
-    config?.limite_activo === true &&
-    config?.fecha_limite &&
-    new Date() >=
-    new Date(config.fecha_limite)
-  ) {
-
-    mensaje.value =
-      '⏰ El tiempo para votar ya terminó.'
-
-    return
-
-  }
-
-
-  // ========================================
-  // GUARDAR EMPLEADO
-  // ========================================
-
-  empleado.value = data
-
-
-  // ========================================
-  // CARGAR CANDIDATOS
-  // ========================================
-
-  await cargarCandidatos()
-
 }
 
 
@@ -588,9 +364,7 @@ async function entrar() {
 async function cargarCandidatos() {
 
   if (!empleado.value) {
-
     return
-
   }
 
 
@@ -599,63 +373,72 @@ async function cargarCandidatos() {
   mensaje.value = ''
 
 
-  const {
-    data,
-    error
-  } = await supabase
+  try {
 
-    .from('empleados')
-
-    .select(`
-      id,
-      expediente,
-      nombre,
-      cargo,
-      area
-    `)
-
-    .eq(
-      'area',
-      empleado.value.area
-    )
-
-    .order(
-      'nombre',
-      {
-        ascending: true
-      }
-    )
+    const {
+      data,
+      error
+    } = await supabase
+      .from('empleados')
+      .select(`
+        id,
+        expediente,
+        nombre,
+        cargo,
+        area
+      `)
+      .eq(
+        'area',
+        empleado.value.area
+      )
+      .order(
+        'nombre',
+        {
+          ascending: true
+        }
+      )
 
 
-  cargandoCandidatos.value = false
+    if (error) {
+
+      console.error(
+        'ERROR CANDIDATOS:',
+        error
+      )
+
+      mensaje.value =
+        `No se pudieron cargar los candidatos: ${error.message}`
+
+      candidatos.value = []
+
+      return
+    }
 
 
-  if (error) {
+    candidatos.value =
+      (data || []).filter(
+        candidato =>
+          candidato.id !==
+          empleado.value.id
+      )
+
+  } catch (error) {
 
     console.error(
-      'ERROR CANDIDATOS:',
+      'ERROR CARGANDO CANDIDATOS:',
       error
     )
 
     mensaje.value =
-      `No se pudieron cargar los candidatos: ${error.message}`
+      'No se pudieron cargar los candidatos.'
 
-    return
+    candidatos.value = []
+
+  } finally {
+
+    cargandoCandidatos.value = false
 
   }
-
-
-  // ========================================
-  // NO PERMITIR VOTAR POR UNO MISMO
-  // ========================================
-
-  candidatos.value =
-    (data || []).filter(
-      candidato =>
-        candidato.id !==
-        empleado.value.id
-    )
-
 }
 
 
@@ -669,7 +452,100 @@ function seleccionar(candidato) {
     candidato
 
   mensaje.value = ''
+}
 
+
+// ==========================================
+// DISPOSITIVO
+// ==========================================
+
+function obtenerDispositivo() {
+
+  if (
+    typeof navigator === 'undefined'
+  ) {
+
+    return {
+      dispositivo: 'Desconocido',
+      sistema_operativo: 'Desconocido',
+      navegador: 'Desconocido'
+    }
+  }
+
+
+  const userAgent =
+    navigator.userAgent || ''
+
+
+  let sistemaOperativo =
+    'Desconocido'
+
+
+  if (/Windows NT/i.test(userAgent))
+    sistemaOperativo = 'Windows'
+
+  else if (/Android/i.test(userAgent))
+    sistemaOperativo = 'Android'
+
+  else if (/iPhone|iPad|iPod/i.test(userAgent))
+    sistemaOperativo = 'iOS'
+
+  else if (/Mac OS X/i.test(userAgent))
+    sistemaOperativo = 'macOS'
+
+  else if (/Linux/i.test(userAgent))
+    sistemaOperativo = 'Linux'
+
+
+  let navegador =
+    'Desconocido'
+
+
+  if (/Edg\//i.test(userAgent))
+    navegador = 'Microsoft Edge'
+
+  else if (/OPR\//i.test(userAgent))
+    navegador = 'Opera'
+
+  else if (/Chrome\//i.test(userAgent))
+    navegador = 'Google Chrome'
+
+  else if (/Firefox\//i.test(userAgent))
+    navegador = 'Mozilla Firefox'
+
+  else if (
+    /Safari\//i.test(userAgent) &&
+    !/Chrome\//i.test(userAgent)
+  )
+    navegador = 'Safari'
+
+
+  let dispositivo =
+    'Computadora'
+
+
+  if (/iPhone/i.test(userAgent))
+    dispositivo = 'iPhone'
+
+  else if (/iPad/i.test(userAgent))
+    dispositivo = 'iPad'
+
+  else if (/Android/i.test(userAgent))
+    dispositivo = 'Dispositivo Android'
+
+  else if (/Macintosh/i.test(userAgent))
+    dispositivo = 'Mac'
+
+  else if (/Windows/i.test(userAgent))
+    dispositivo = 'Computadora Windows'
+
+
+  return {
+    dispositivo,
+    sistema_operativo:
+      sistemaOperativo,
+    navegador
+  }
 }
 
 
@@ -679,17 +555,12 @@ function seleccionar(candidato) {
 
 async function registrarVoto() {
 
-  // ========================================
-  // VALIDACIONES
-  // ========================================
-
   if (!empleado.value) {
 
     mensaje.value =
       'Empleado no identificado'
 
     return
-
   }
 
 
@@ -699,161 +570,90 @@ async function registrarVoto() {
       'Selecciona una persona para votar'
 
     return
-
   }
 
 
   votando.value = true
-
   mensaje.value = ''
 
-
-  // ========================================
-  // COMPROBAR LÍMITE NUEVAMENTE
-  // ========================================
-
-  const {
-    data: config,
-    error: errorConfig
-  } = await supabase
-
-    .from('configuracion')
-
-    .select(`
-      limite_activo,
-      fecha_limite
-    `)
-
-    .eq(
-      'id',
-      1
-    )
-
-    .maybeSingle()
-
-
-  if (errorConfig) {
-
-    console.error(
-      'ERROR CONFIG:',
-      errorConfig
-    )
-
-    votando.value = false
-
-    mensaje.value =
-      `No se pudo comprobar el horario: ${errorConfig.message}`
-
-    return
-
-  }
-
-
-  if (
-    config?.limite_activo === true &&
-    config?.fecha_limite &&
-    new Date() >=
-    new Date(config.fecha_limite)
-  ) {
-
-    votando.value = false
-
-    mensaje.value =
-      '⏰ El tiempo para votar ya terminó.'
-
-    return
-
-  }
-
-
-  // ========================================
-  // COMPROBAR MISMA ÁREA
-  // ========================================
-
-  if (
-    candidatoSeleccionado.value.area !==
-    empleado.value.area
-  ) {
-
-    votando.value = false
-
-    mensaje.value =
-      '❌ No puedes votar por una persona de otra área.'
-
-    return
-
-  }
-
-
-  // ========================================
-  // NO VOTAR POR UNO MISMO
-  // ========================================
-
-  if (
-    candidatoSeleccionado.value.id ===
-    empleado.value.id
-  ) {
-
-    votando.value = false
-
-    mensaje.value =
-      '❌ No puedes votar por ti mismo.'
-
-    return
-
-  }
-
-
-  // ========================================
-  // OBTENER DISPOSITIVO
-  // ========================================
 
   const dispositivo =
     obtenerDispositivo()
 
 
-  console.log(
-    'Dispositivo utilizado:',
-    dispositivo
-  )
+  try {
+
+    const {
+      data,
+      error
+    } = await supabase.rpc(
+      'registrar_voto',
+      {
+        p_empleado_id:
+          empleado.value.id,
+
+        p_candidato_id:
+          candidatoSeleccionado.value.id,
+
+        p_dispositivo:
+          dispositivo.dispositivo,
+
+        p_sistema_operativo:
+          dispositivo.sistema_operativo,
+
+        p_navegador:
+          dispositivo.navegador
+      }
+    )
 
 
-  // ========================================
-  // REGISTRAR VOTO
-  // ========================================
+    if (error) {
 
-  const {
-    data,
-    error
-  } = await supabase.rpc(
-    'registrar_voto',
-    {
-      p_empleado_id:
-        empleado.value.id,
+      console.error(
+        'ERROR AL REGISTRAR VOTO:',
+        error
+      )
 
-      p_candidato_id:
-        candidatoSeleccionado.value.id,
+      mensaje.value =
+        error.message ||
+        'No fue posible registrar el voto.'
 
-      p_dispositivo:
-        dispositivo.dispositivo,
-
-      p_sistema_operativo:
-        dispositivo.sistema_operativo,
-
-      p_navegador:
-        dispositivo.navegador
+      return
     }
-  )
 
 
-  votando.value = false
+    console.log(
+      'VOTO REGISTRADO:',
+      data
+    )
 
 
-  // ========================================
-  // ERROR
-  // ========================================
+    if (
+      data &&
+      data.ok === false
+    ) {
 
-  if (error) {
+      mensaje.value =
+        data.mensaje ||
+        'No fue posible registrar el voto.'
+
+      return
+    }
+
+
+    votoRegistrado.value = true
+
+    empleado.value = null
+
+    candidatoSeleccionado.value = null
+
+    candidatos.value = []
+
+    expediente.value = ''
+
+    token.value = ''
+
+  } catch (error) {
 
     console.error(
       'ERROR AL REGISTRAR VOTO:',
@@ -861,36 +661,15 @@ async function registrarVoto() {
     )
 
     mensaje.value =
-      error.message ||
+      error?.message ||
       'No fue posible registrar el voto.'
 
-    return
+  } finally {
+
+    votando.value = false
 
   }
-
-
-  console.log(
-    'VOTO REGISTRADO:',
-    data
-  )
-
-
-  // ========================================
-  // ÉXITO
-  // ========================================
-
-  votoRegistrado.value = true
-
-  empleado.value = null
-
-  candidatoSeleccionado.value = null
-
-  candidatos.value = []
-
-  expediente.value = ''
-
 }
-
 
 </script>
 
@@ -917,7 +696,6 @@ async function registrarVoto() {
       #f1f5f9,
       #e2e8f0
     );
-
 }
 
 
@@ -932,7 +710,6 @@ async function registrarVoto() {
   align-items: center;
 
   padding: 20px;
-
 }
 
 
@@ -952,8 +729,7 @@ async function registrarVoto() {
 
   box-shadow:
     0 10px 30px
-    rgba(0, 0, 0, .15);
-
+    rgba(0,0,0,.15);
 }
 
 
@@ -962,7 +738,6 @@ h1 {
   margin-top: 0;
 
   color: #1e293b;
-
 }
 
 
@@ -971,14 +746,12 @@ h2 {
   color: #176b3a;
 
   margin-bottom: 20px;
-
 }
 
 
 h3 {
 
   color: #334155;
-
 }
 
 
@@ -988,7 +761,7 @@ input {
 
   padding: 15px;
 
-  margin: 15px 0;
+  margin: 10px 0;
 
   border:
     1px solid #cbd5e1;
@@ -998,7 +771,6 @@ input {
   font-size: 17px;
 
   outline: none;
-
 }
 
 
@@ -1009,8 +781,7 @@ input:focus {
 
   box-shadow:
     0 0 0 3px
-    rgba(37, 99, 235, .12);
-
+    rgba(37,99,235,.12);
 }
 
 
@@ -1033,14 +804,12 @@ button {
   font-size: 16px;
 
   cursor: pointer;
-
 }
 
 
 button:hover {
 
   background: #1e293b;
-
 }
 
 
@@ -1049,14 +818,12 @@ button:disabled {
   background: #94a3b8;
 
   cursor: not-allowed;
-
 }
 
 
 .datos-empleado {
 
-  background:
-    #f8fafc;
+  background: #f8fafc;
 
   border:
     1px solid #e2e8f0;
@@ -1068,14 +835,12 @@ button:disabled {
   margin-top: 20px;
 
   text-align: left;
-
 }
 
 
 .datos-empleado p {
 
   margin: 8px 0;
-
 }
 
 
@@ -1084,7 +849,6 @@ button:disabled {
   color: #64748b;
 
   font-size: 14px;
-
 }
 
 
@@ -1093,7 +857,6 @@ button:disabled {
   padding: 25px;
 
   color: #64748b;
-
 }
 
 
@@ -1106,7 +869,6 @@ button:disabled {
   gap: 10px;
 
   margin-top: 20px;
-
 }
 
 
@@ -1120,40 +882,32 @@ button:disabled {
 
   text-align: left;
 
-  background:
-    #f1f5f9;
+  background: #f1f5f9;
 
   color: #1e293b;
 
   border:
     2px solid transparent;
-
 }
 
 
 .candidato:hover {
 
-  background:
-    #e2e8f0;
-
+  background: #e2e8f0;
 }
 
 
 .candidato.seleccionado {
 
-  background:
-    #dbeafe;
+  background: #dbeafe;
 
-  border-color:
-    #2563eb;
-
+  border-color: #2563eb;
 }
 
 
 .candidato strong {
 
   font-size: 16px;
-
 }
 
 
@@ -1164,7 +918,6 @@ button:disabled {
   font-size: 14px;
 
   color: #64748b;
-
 }
 
 
@@ -1172,17 +925,13 @@ button:disabled {
 
   margin-top: 25px;
 
-  background:
-    #176b3a;
-
+  background: #176b3a;
 }
 
 
 .boton-votar:hover {
 
-  background:
-    #12562f;
-
+  background: #12562f;
 }
 
 
@@ -1193,7 +942,6 @@ button:disabled {
   color: #b91c1c;
 
   font-weight: bold;
-
 }
 
 
@@ -1201,8 +949,7 @@ button:disabled {
 
   padding: 35px;
 
-  background:
-    #ecfdf5;
+  background: #ecfdf5;
 
   border:
     1px solid #a7f3d0;
@@ -1210,7 +957,6 @@ button:disabled {
   border-radius: 14px;
 
   color: #166534;
-
 }
 
 
@@ -1220,8 +966,7 @@ button:disabled {
 
   height: 70px;
 
-  margin:
-    0 auto 20px;
+  margin: 0 auto 20px;
 
   display: flex;
 
@@ -1231,15 +976,13 @@ button:disabled {
 
   border-radius: 50%;
 
-  background:
-    #22c55e;
+  background: #22c55e;
 
   color: white;
 
   font-size: 40px;
 
   font-weight: bold;
-
 }
 
 
@@ -1250,25 +993,18 @@ hr {
   border-top:
     1px solid #e2e8f0;
 
-  margin:
-    28px 0;
-
+  margin: 28px 0;
 }
 
 
 @media (max-width: 700px) {
 
   .pantalla {
-
     padding: 15px;
-
   }
 
-
   .tarjeta {
-
     padding: 25px 20px;
-
   }
 
 }

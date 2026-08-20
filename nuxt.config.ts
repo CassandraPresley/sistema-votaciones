@@ -1,10 +1,14 @@
 export default defineNuxtConfig({
-  compatibilityDate: '2025-07-15',
+  compatibilityDate: '2026-08-20',
 
   runtimeConfig: {
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseKey: process.env.SUPABASE_KEY,
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+
     public: {
-      supabaseUrl: 'https://zknsmqlwwofkalqjkdry.supabase.co',
-      supabaseKey: 'sb_publishable_rVIqNkjBurwoZI4915oWDw_glIJunVl'
+      supabaseUrl: process.env.SUPABASE_URL,
+      supabaseKey: process.env.SUPABASE_KEY
     }
   }
 })
