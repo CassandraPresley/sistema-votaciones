@@ -15,7 +15,6 @@ const candidatoSeleccionado = ref(null)
 const votoExitoso = ref(false)
 const votacionBloqueadaPorTiempo = ref(false)
 
-// Detectar dispositivo del votante
 const obtenerDispositivo = () => {
   const ua = navigator.userAgent
   if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) return 'Tablet'
@@ -23,17 +22,12 @@ const obtenerDispositivo = () => {
   return 'Computadora / PC'
 }
 
-// Verificar si el tiempo límite ya expiró
 const verificarTiempoActivo = async () => {
   const { data: config } = await supabase.from('config_votacion').select('*').eq('id', 1).single()
   if (config && config.limite_tiempo) {
     const ahora = new Date().getTime()
     const limite = new Date(config.limite_tiempo).getTime()
-    if (ahora >= limite) {
-      votacionBloqueadaPorTiempo.value = true
-    } else {
-      votacionBloqueadaPorTiempo.value = false
-    }
+    votacionBloqueadaPorTiempo.value = ahora >= limite
   } else {
     votacionBloqueadaPorTiempo.value = false
   }
@@ -82,11 +76,12 @@ const verificarAcceso = async () => {
 
   empleadoLogueado.value = empleado
 
-  // Cargar lista de compañeros de la misma área
+  // Cargar compañeros de la misma área EXCLUYENDO al propio empleado (para que no pueda votarse a sí mismo)
   const { data: companeros } = await supabase
     .from('empleados')
     .select('*')
     .eq('area', empleado.area)
+    .neq('expediente', empleado.expediente)
 
   if (companeros) {
     listaEmpleadosArea.value = companeros
@@ -102,13 +97,11 @@ const emitirVoto = async () => {
   }
 
   const candidatoObj = listaEmpleadosArea.value.find(c => c.expediente === candidatoSeleccionado.value)
-
   if (!candidatoObj) {
     alert('Candidato no válido.')
     return
   }
 
-  // 1. Insertar el voto en la tabla 'votos'
   const { error: errVoto } = await supabase.from('votos').insert([
     {
       expediente_votante: empleadoLogueado.value.expediente,
@@ -121,13 +114,11 @@ const emitirVoto = async () => {
   ])
 
   if (errVoto) {
-    console.error('Error al insertar voto:', errVoto)
     mensaje.value = 'Error al registrar el voto: ' + errVoto.message
     tipoMensaje.value = 'error'
     return
   }
 
-  // 2. Marcar al empleado como que ya votó
   await supabase
     .from('empleados')
     .update({ ya_voto: true })
@@ -156,7 +147,6 @@ onMounted(() => {
       <h2>SISTEMA DE VOTACIÓN</h2>
       <p class="subtit">Votación por Área</p>
 
-      <!-- Formulario de Ingreso -->
       <div v-if="!empleadoLogueado">
         <form @submit.prevent="verificarAcceso">
           <div class="form-group">
@@ -171,7 +161,6 @@ onMounted(() => {
         </form>
       </div>
 
-      <!-- Pantalla de Votación -->
       <div v-else-if="!votoExitoso" class="votar-section">
         <div class="info-empleado">
           <p><strong>Nombre:</strong> {{ empleadoLogueado.nombre }}</p>
@@ -180,7 +169,7 @@ onMounted(() => {
         <hr />
         
         <h3>Selecciona a tu candidato</h3>
-        <p class="instruccion">Miembros de tu misma área de trabajo:</p>
+        <p class="instruccion">Compañeros de tu área de trabajo (no puedes votar por ti mismo):</p>
 
         <div class="candidatos-lista">
           <div 
@@ -206,7 +195,6 @@ onMounted(() => {
         <button @click="reiniciarSesion" class="btn-salir">Cancelar / Salir</button>
       </div>
 
-      <!-- Pantalla de Éxito -->
       <div v-else class="votar-section">
         <div class="exito-icono">✅</div>
         <h3>¡Voto registrado con éxito!</h3>
