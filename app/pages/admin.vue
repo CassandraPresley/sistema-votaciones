@@ -25,7 +25,6 @@ const fechaLimiteInput = ref('')
 const horaLimiteInput = ref('')
 const tiempoRestanteStr = ref('Sin límite de tiempo establecido')
 const votacionCerrada = ref(false)
-const limiteConfigurado = ref(false)
 
 // Restablecimiento Específico por Área
 const areaSeleccionadaReset = ref('')
@@ -34,27 +33,47 @@ const empleadoSeleccionadoReset = ref('')
 let canalRealtime = null
 let timerInterval = null
 
-const loginAdmin = () => {
-  if (userAdmin.value === 'admin' && passAdmin.value === 'admin123') {
+// Autenticación desde la tabla 'administradores' (usuario, password_hash, activo)
+const loginAdmin = async () => {
+  errorAdmin.value = ''
+  if (!userAdmin.value.trim() || !passAdmin.value.trim()) {
+    errorAdmin.value = 'Ingresa usuario y contraseña.'
+    return
+  }
+
+  const { data: adminUser, error } = await supabase
+    .from('administradores')
+    .select('*')
+    .eq('usuario', userAdmin.value.trim())
+    .eq('password_hash', passAdmin.value.trim())
+    .eq('activo', true)
+    .single()
+
+  if (error || !adminUser) {
+    errorAdmin.value = 'Usuario o contraseña incorrectos, o cuenta inactiva.'
+  } else {
     adminAutenticado.value = true
     errorAdmin.value = ''
-    cargarDatosAdmin()
-  } else {
-    errorAdmin.value = 'Usuario o contraseña incorrectos.'
+    await cargarDatosAdmin()
+    iniciarSuscripcionRealtime()
   }
 }
 
 const cargarDatosAdmin = async () => {
-  // Cargar Empleados
+  // 1. Cargar Empleados
   const { data: empData } = await supabase.from('empleados').select('*')
   if (empData) {
     empleadosLista.value = empData
     totalEmpleados.value = empData.length
-    areasDisponibles.value = [...new Set(empData.map(e => e.area))]
+    areasDisponibles.value = [...new Set(empData.map(e => e.area).filter(Boolean))]
   }
 
-  // Cargar Votos
-  const { data: votosData } = await supabase.from('votos').select('*').order('fecha_hora', { ascending: false })
+  // 2. Cargar Votos
+  const { data: votosData } = await supabase
+    .from('votos')
+    .select('*')
+    .order('fecha_hora', { ascending: false })
+    
   if (votosData) {
     listaVotos.value = votosData
     totalVotos.value = votosData.length
@@ -64,48 +83,41 @@ const cargarDatosAdmin = async () => {
     ? ((totalVotos.value / totalEmpleados.value) * 100).toFixed(1) 
     : 0
 
-  // Cargar Límite de Tiempo
+  // 3. Cargar Límite de Tiempo
   const { data: configData } = await supabase.from('config_votacion').select('*').eq('id', 1).single()
   if (configData && configData.limite_tiempo) {
-    limiteConfigurado.value = true
     iniciarCuentaRegresiva(configData.limite_tiempo)
   } else {
-    limiteConfigurado.value = false
     tiempoRestanteStr.value = 'Sin límite de tiempo activo'
     votacionCerrada.value = false
   }
 }
 
-const iniciarCuentaRegresiva = (limiteISO) => {
-  const limiteDate = new Date(limiteISO).getTime()
-  if (timerInterval) clearInterval(timerInterval)
+// Escuchar cambios en la base de datos en tiempo real
+const iniciarSuscripcionRealtime = () => {
+  if (canalRealtime) supabase.removeChannel(canalRealtime)
 
-  timerInterval = setInterval(() => {
-    const ahora = new Date().getTime()
-    const diferencia = limiteDate - ahora
-
-    if (diferencia <= 0) {
-      tiempoRestanteStr.value = '🔴 VOTACIÓN CERRADA (Tiempo Agotado)'
-      votacionCerrada.value = true
-      clearInterval(timerInterval)
-    } else {
-      votacionCerrada.value = false
-      const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24))
-      const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-      const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60))
-      const segundos = Math.floor((diferencia % (1000 * 60)) / 1000)
-      tiempoRestanteStr.value = `🟢 Tiempo restante: ${dias}d ${horas}h ${minutos}m ${segundos}s`
-    }
-  }, 1000)
+  canalRealtime = supabase
+    .channel('public:votos_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'votos' }, () => cargarDatosAdmin())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'empleados' }, () => cargarDatosAdmin())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'config_votacion' }, () => cargarDatosAdmin())
+    .subscribe()
 }
 
+// Configuración exacta con hora local (Previene falsa alerta de "Tiempo Agotado")
 const guardarLimiteTiempo = async () => {
   if (!fechaLimiteInput.value || !horaLimiteInput.value) {
     alert('Selecciona una fecha y hora válidas.')
     return
   }
-  const fechaHoraCompleta = `${fechaLimiteInput.value}T${horaLimiteInput.value}:00`
-  const { error } = await supabase.from('config_votacion').upsert({ id: 1, limite_tiempo: fechaHoraCompleta })
+
+  const [year, month, day] = fechaLimiteInput.value.split('-')
+  const [hours, minutes] = horaLimiteInput.value.split(':')
+  const fechaLocal = new Date(year, month - 1, day, hours, minutes, 0)
+  const fechaISO = fechaLocal.toISOString()
+
+  const { error } = await supabase.from('config_votacion').upsert({ id: 1, limite_tiempo: fechaISO })
 
   if (!error) {
     alert('Límite de tiempo guardado exitosamente.')
@@ -119,20 +131,92 @@ const borrarLimiteTiempo = async () => {
   if (!confirm('¿Deseas quitar el límite de tiempo y reabrir la votación?')) return
   await supabase.from('config_votacion').update({ limite_tiempo: null }).eq('id', 1)
   if (timerInterval) clearInterval(timerInterval)
-  limiteConfigurado.value = false
   tiempoRestanteStr.value = 'Sin límite de tiempo activo'
   votacionCerrada.value = false
   alert('Límite de tiempo restablecido.')
   cargarDatosAdmin()
 }
 
-// Empleados filtrados por área para el reset
+const iniciarCuentaRegresiva = (limiteISO) => {
+  if (timerInterval) clearInterval(timerInterval)
+
+  timerInterval = setInterval(() => {
+    const ahora = new Date().getTime()
+    const limiteDate = new Date(limiteISO).getTime()
+    const diferencia = limiteDate - ahora
+
+    if (diferencia <= 0) {
+      tiempoRestanteStr.value = '🔴 VOTACIÓN CERRADA (Tiempo Agotado)'
+      votacionCerrada.value = true
+      clearInterval(timerInterval)
+    } else {
+      votacionCerrada.value = false
+      const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24))
+      const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60))
+      const segundos = Math.floor((diferencia % (1000 * 60)) / 1000)
+
+      let textoTiempo = '🟢 Tiempo restante: '
+      if (dias > 0) textoTiempo += `${dias}d `
+      textoTiempo += `${horas}h ${minutos}m ${segundos}s`
+
+      tiempoRestanteStr.value = textoTiempo
+    }
+  }, 1000)
+}
+
+// PODIO GENERAL: Candidatos con más votos a nivel global
+const podioGeneral = computed(() => {
+  if (listaVotos.value.length === 0) return []
+
+  const conteo = {}
+  listaVotos.value.forEach(v => {
+    const key = v.expediente_candidato || v.nombre_candidato
+    if (!conteo[key]) {
+      conteo[key] = {
+        nombre: v.nombre_candidato,
+        expediente: v.expediente_candidato,
+        area: v.area,
+        votos: 0
+      }
+    }
+    conteo[key].votos++
+  })
+
+  return Object.values(conteo).sort((a, b) => b.votos - a.votos).slice(0, 3)
+})
+
+// PODIO POR ÁREAS
+const podioPorArea = computed(() => {
+  const conteoArea = {}
+  
+  areasDisponibles.value.forEach(area => {
+    conteoArea[area] = {}
+  })
+
+  listaVotos.value.forEach(v => {
+    if (!conteoArea[v.area]) conteoArea[v.area] = {}
+    const cand = v.nombre_candidato
+    conteoArea[v.area][cand] = (conteoArea[v.area][cand] || 0) + 1
+  })
+
+  const podioFinal = []
+  for (let area in conteoArea) {
+    const candidatos = Object.entries(conteoArea[area])
+      .map(([nombre, votos]) => ({ nombre, votos }))
+      .sort((a, b) => b.votos - a.votos)
+    podioFinal.push({ area, candidatos })
+  }
+
+  return podioFinal
+})
+
+// Lista de empleados filtrada para el restablecimiento específico
 const empleadosDeAreaSeleccionada = computed(() => {
   if (!areaSeleccionadaReset.value) return []
   return empleadosLista.value.filter(e => e.area === areaSeleccionadaReset.value)
 })
 
-// Restablecer voto de una persona
 const restablecerVotoEspecifico = async () => {
   if (!empleadoSeleccionadoReset.value) {
     alert('Selecciona un empleado para restablecer su voto.')
@@ -148,7 +232,6 @@ const restablecerVotoEspecifico = async () => {
   cargarDatosAdmin()
 }
 
-// Restablecer todos los votos
 const restablecerTodosLosVotos = async () => {
   if (!confirm('⚠️ ¿ATENCIÓN: Quieres borrar TODOS los votos y reiniciar el sistema por completo?')) return
   
@@ -159,31 +242,6 @@ const restablecerTodosLosVotos = async () => {
   cargarDatosAdmin()
 }
 
-// Podio por Áreas
-const podioPorArea = computed(() => {
-  const conteoArea = {}
-  
-  areasDisponibles.value.forEach(area => {
-    conteoArea[area] = {}
-  })
-
-  listaVotos.value.forEach(v => {
-    if (!conteoArea[v.area]) conteoArea[v.area] = {}
-    conteoArea[v.area][v.nombre_candidato] = (conteoArea[v.area][v.nombre_candidato] || 0) + 1
-  })
-
-  const podioFinal = []
-  for (let area in conteoArea) {
-    const candidatos = Object.entries(conteoArea[area])
-      .map(([nombre, votos]) => ({ nombre, votos }))
-      .sort((a, b) => b.votos - a.votos)
-    podioFinal.push({ area, candidatos })
-  }
-
-  return podioFinal
-})
-
-// Exportar CSV
 const descargarInformeCSV = () => {
   let csv = "Expediente Votante,Nombre Votante,Area,Expediente Candidato,Nombre Candidato,Dispositivo,Fecha y Hora\n"
   listaVotos.value.forEach(v => {
@@ -200,15 +258,6 @@ const descargarInformeCSV = () => {
   document.body.removeChild(link)
 }
 
-onMounted(() => {
-  canalRealtime = supabase
-    .channel('admin-updates')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'votos' }, () => cargarDatosAdmin())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'empleados' }, () => cargarDatosAdmin())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'config_votacion' }, () => cargarDatosAdmin())
-    .subscribe()
-})
-
 onUnmounted(() => {
   if (canalRealtime) supabase.removeChannel(canalRealtime)
   if (timerInterval) clearInterval(timerInterval)
@@ -220,7 +269,7 @@ onUnmounted(() => {
     <!-- LOGIN ADMIN -->
     <div v-if="!adminAutenticado" class="login-card">
       <h2>Acceso Administrador</h2>
-      <p>Ingresa usuario y contraseña de gestión</p>
+      <p>Ingresa tu usuario y contraseña</p>
       <form @submit.prevent="loginAdmin">
         <input type="text" v-model="userAdmin" placeholder="Usuario" class="inp" />
         <input type="password" v-model="passAdmin" placeholder="Contraseña" class="inp" />
@@ -240,6 +289,20 @@ onUnmounted(() => {
       <!-- Banner Estado de Votación -->
       <div class="status-banner" :class="{ cerrado: votacionCerrada }">
         <h3>{{ tiempoRestanteStr }}</h3>
+      </div>
+
+      <!-- PODIO GENERAL -->
+      <div class="box podio-general-box">
+        <h3>🏆 Podio General (Más Votados Globales)</h3>
+        <div v-if="podioGeneral.length > 0" class="podio-general-cards">
+          <div v-for="(cand, idx) in podioGeneral" :key="cand.expediente" class="p-card" :class="'p-' + (idx + 1)">
+            <div class="medalla">{{ idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉' }}</div>
+            <h4>{{ cand.nombre }}</h4>
+            <p>{{ cand.area }}</p>
+            <span class="votos-count">{{ cand.votos }} votos</span>
+          </div>
+        </div>
+        <p v-else class="sub center">Aún no se han registrado votos en el sistema.</p>
       </div>
 
       <!-- Control de Tiempo Límite -->
@@ -262,7 +325,7 @@ onUnmounted(() => {
 
       <!-- Podio por Áreas -->
       <div class="box">
-        <h3>🏆 Podio por Áreas (Quién va ganando)</h3>
+        <h3>📊 Resultados por Áreas</h3>
         <div class="podio-grid">
           <div v-for="item in podioPorArea" :key="item.area" class="podio-card">
             <h4>{{ item.area }}</h4>
@@ -280,7 +343,7 @@ onUnmounted(() => {
         <h3>🔄 Opciones de Restablecimiento</h3>
         <div class="reset-box">
           <div class="sub-reset">
-            <h4>Restablecer un Voto Específico por Área:</h4>
+            <h4>Restablecer Voto por Área:</h4>
             <select v-model="areaSeleccionadaReset" class="inp">
               <option value="">-- Selecciona el Área --</option>
               <option v-for="a in areasDisponibles" :key="a" :value="a">{{ a }}</option>
@@ -300,7 +363,7 @@ onUnmounted(() => {
 
           <div class="sub-reset border-left">
             <h4>Restablecer Sistema Completo:</h4>
-            <p class="sub">Borra todos los votos de todas las áreas a la vez.</p>
+            <p class="sub">Borra todos los votos registrados.</p>
             <button @click="restablecerTodosLosVotos" class="btn-red">Restablecer Todos los Votos</button>
           </div>
         </div>
@@ -313,7 +376,7 @@ onUnmounted(() => {
 
       <!-- Registro en Tiempo Real -->
       <div class="box">
-        <h3>⚡ Votos Registrados en Tiempo Real (Quién, Por quién y Dispositivo)</h3>
+        <h3>⚡ Votos Registrados en Tiempo Real</h3>
         <div class="tbl-wrap">
           <table>
             <thead>
@@ -351,8 +414,21 @@ onUnmounted(() => {
 .status-banner { background: #1e8449; color: white; padding: 12px; border-radius: 6px; text-align: center; margin-bottom: 20px; }
 .status-banner.cerrado { background: #c0392b; }
 .box { background: #f8f9fa; border: 1px solid #e5e7e9; padding: 18px; border-radius: 8px; margin-bottom: 20px; }
+
+/* Podio General */
+.podio-general-box { background: #fefde8; border-color: #fef08a; }
+.podio-general-cards { display: flex; gap: 15px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+.p-card { background: white; border: 2px solid #e5e7eb; border-radius: 10px; padding: 15px; text-align: center; flex: 1; min-width: 180px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.p-card.p-1 { border-color: #f59e0b; background: #fffbeb; }
+.p-card.p-2 { border-color: #9ca3af; }
+.p-card.p-3 { border-color: #d97706; }
+.medalla { font-size: 32px; margin-bottom: 5px; }
+.p-card h4 { margin: 0; font-size: 16px; color: #1f2937; }
+.p-card p { margin: 3px 0; font-size: 12px; color: #6b7280; }
+.votos-count { background: #f3f4f6; color: #1f2937; padding: 3px 8px; border-radius: 12px; font-weight: bold; font-size: 12px; display: inline-block; margin-top: 5px; }
+
 .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-.inp { padding: 10px; border: 1px solid #ccc; border-radius: 6px; outline: none; margin-bottom: 10px; }
+.inp { padding: 10px; border: 1px solid #ccc; border-radius: 6px; outline: none; margin-bottom: 10px; width: 100%; box-sizing: border-box; }
 .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
 .m-box { background: white; border-left: 5px solid #7f8c8d; padding: 15px; border-radius: 6px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
 .m-box.green { border-left-color: #27ae60; }
@@ -367,4 +443,16 @@ onUnmounted(() => {
 .tbl-wrap { max-height: 280px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 6px; margin-top: 10px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
-th { background: #f2
+th { background: #f2f2f2; position: sticky; top: 0; }
+.chip { background: #e8f4f8; color: #2980b9; padding: 3px 6px; border-radius: 4px; font-size: 11px; }
+.btn-primary, .btn-blue, .btn-gray, .btn-orange, .btn-red, .btn-green, .btn-out { padding: 10px 15px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: white; }
+.btn-primary, .btn-blue { background: #2c3e50; }
+.btn-gray { background: #7f8c8d; }
+.btn-orange { background: #e67e22; }
+.btn-red, .btn-out { background: #c0392b; }
+.btn-green { background: #27ae60; font-size: 15px; width: 100%; }
+.err { color: red; font-size: 13px; }
+.sub { font-size: 12px; color: #777; }
+.center { text-align: center; }
+.lnk { font-size: 13px; color: #2980b9; text-decoration: none; display: block; margin-top: 10px; }
+</style>

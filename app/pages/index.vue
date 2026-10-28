@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = 'https://zknsmqlwwofkalqjkdry.supabase.co'
@@ -13,10 +13,42 @@ const empleadoLogueado = ref(null)
 const listaEmpleadosArea = ref([])
 const candidatoSeleccionado = ref(null)
 const votoExitoso = ref(false)
+const votacionBloqueadaPorTiempo = ref(false)
+
+// Detectar dispositivo del votante
+const obtenerDispositivo = () => {
+  const ua = navigator.userAgent
+  if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) return 'Tablet'
+  if (/Mobile|iP(hone|od)|Android|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return 'Móvil'
+  return 'Computadora / PC'
+}
+
+// Verificar si el tiempo límite ya expiró
+const verificarTiempoActivo = async () => {
+  const { data: config } = await supabase.from('config_votacion').select('*').eq('id', 1).single()
+  if (config && config.limite_tiempo) {
+    const ahora = new Date().getTime()
+    const limite = new Date(config.limite_tiempo).getTime()
+    if (ahora >= limite) {
+      votacionBloqueadaPorTiempo.value = true
+    } else {
+      votacionBloqueadaPorTiempo.value = false
+    }
+  } else {
+    votacionBloqueadaPorTiempo.value = false
+  }
+}
 
 const verificarAcceso = async () => {
   mensaje.value = ''
   tipoMensaje.value = ''
+
+  await verificarTiempoActivo()
+  if (votacionBloqueadaPorTiempo.value) {
+    mensaje.value = 'El periodo de votación ha finalizado. Acceso bloqueado.'
+    tipoMensaje.value = 'error'
+    return
+  }
 
   if (!expediente.value.trim()) {
     mensaje.value = 'Por favor ingresa tu número de expediente.'
@@ -24,7 +56,6 @@ const verificarAcceso = async () => {
     return
   }
 
-  // 1. Buscar al empleado que intenta iniciar sesión
   const { data: empleado, error } = await supabase
     .from('empleados')
     .select('*')
@@ -51,14 +82,13 @@ const verificarAcceso = async () => {
 
   empleadoLogueado.value = empleado
 
-  // 2. Cargar todos los empleados del MISMO ÁREA para que pueda elegir entre ellos
-  const { data: companeros, error: errCompaneros } = await supabase
+  // Cargar lista de compañeros de la misma área
+  const { data: companeros } = await supabase
     .from('empleados')
     .select('*')
     .eq('area', empleado.area)
 
-  if (!errCompaneros) {
-    // Opcional: Si quieres que el empleado no pueda votarse a sí mismo, puedes filtrarlo con .filter(c => c.expediente !== empleado.expediente)
+  if (companeros) {
     listaEmpleadosArea.value = companeros
   }
 
@@ -71,20 +101,38 @@ const emitirVoto = async () => {
     return
   }
 
-  // Marcar al votante como que ya votó
-  const { error } = await supabase
-    .from('empleados')
-    .update({ ya_voto: true })
-    .eq('expediente', empleadoLogueado.value.expediente)
+  const candidatoObj = listaEmpleadosArea.value.find(c => c.expediente === candidatoSeleccionado.value)
 
-  if (error) {
-    mensaje.value = 'Error al registrar el voto.'
+  if (!candidatoObj) {
+    alert('Candidato no válido.')
+    return
+  }
+
+  // 1. Insertar el voto en la tabla 'votos'
+  const { error: errVoto } = await supabase.from('votos').insert([
+    {
+      expediente_votante: empleadoLogueado.value.expediente,
+      nombre_votante: empleadoLogueado.value.nombre,
+      area: empleadoLogueado.value.area,
+      expediente_candidato: candidatoObj.expediente,
+      nombre_candidato: candidatoObj.nombre,
+      dispositivo: obtenerDispositivo()
+    }
+  ])
+
+  if (errVoto) {
+    console.error('Error al insertar voto:', errVoto)
+    mensaje.value = 'Error al registrar el voto: ' + errVoto.message
     tipoMensaje.value = 'error'
     return
   }
 
-  // Opcional: Aquí podrías guardar también a quién votó si creaste una tabla independiente de 'votos'.
-  // Por ahora, actualizamos el estado para mostrar la pantalla de éxito.
+  // 2. Marcar al empleado como que ya votó
+  await supabase
+    .from('empleados')
+    .update({ ya_voto: true })
+    .eq('expediente', empleadoLogueado.value.expediente)
+
   votoExitoso.value = true
 }
 
@@ -96,6 +144,10 @@ const reiniciarSesion = () => {
   candidatoSeleccionado.value = null
   votoExitoso.value = false
 }
+
+onMounted(() => {
+  verificarTiempoActivo()
+})
 </script>
 
 <template>
@@ -104,7 +156,7 @@ const reiniciarSesion = () => {
       <h2>SISTEMA DE VOTACIÓN</h2>
       <p class="subtit">Votación por Área</p>
 
-      <!-- Formulario de Ingreso por Expediente -->
+      <!-- Formulario de Ingreso -->
       <div v-if="!empleadoLogueado">
         <form @submit.prevent="verificarAcceso">
           <div class="form-group">
@@ -119,7 +171,7 @@ const reiniciarSesion = () => {
         </form>
       </div>
 
-      <!-- Pantalla de Votación: Muestra únicamente candidatos de su misma área -->
+      <!-- Pantalla de Votación -->
       <div v-else-if="!votoExitoso" class="votar-section">
         <div class="info-empleado">
           <p><strong>Nombre:</strong> {{ empleadoLogueado.nombre }}</p>
@@ -128,7 +180,7 @@ const reiniciarSesion = () => {
         <hr />
         
         <h3>Selecciona a tu candidato</h3>
-        <p class="instruccion">Solo puedes votar por miembros de tu área de trabajo:</p>
+        <p class="instruccion">Miembros de tu misma área de trabajo:</p>
 
         <div class="candidatos-lista">
           <div 
@@ -141,7 +193,7 @@ const reiniciarSesion = () => {
             <div class="radio-circle"></div>
             <div class="candidato-info">
               <strong>{{ candidato.nombre }}</strong>
-              <small>{{ candidato.cargo }} (Exp: {{ candidato.expediente }})</small>
+              <small>{{ candidato.cargo }}</small>
             </div>
           </div>
         </div>
@@ -166,7 +218,7 @@ const reiniciarSesion = () => {
         {{ mensaje }}
       </p>
 
-      <div style="margin-top: 20px;">
+      <div style="margin-top: 25px;">
         <NuxtLink to="/admin" class="link-admin">Ir al Panel de Administración</NuxtLink>
       </div>
     </div>
@@ -174,158 +226,32 @@ const reiniciarSesion = () => {
 </template>
 
 <style scoped>
-.container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background-color: #f4f6f9;
-  font-family: Arial, sans-serif;
-  padding: 20px;
-}
-.card {
-  background: white;
-  padding: 30px;
-  border-radius: 12px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-  width: 100%;
-  max-width: 480px;
-  text-align: center;
-}
-h2 {
-  color: #1a252f;
-  margin-bottom: 5px;
-}
-.subtit {
-  color: #666;
-  font-size: 14px;
-  margin-bottom: 20px;
-}
-.form-group {
-  margin-bottom: 15px;
-}
-input {
-  width: 100%;
-  padding: 12px;
-  font-size: 16px;
-  border: 1px solid #ccd1d1;
-  border-radius: 8px;
-  box-sizing: border-box;
-  text-align: center;
-}
-.btn {
-  width: 100%;
-  padding: 12px;
-  background-color: #2c3e50;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: bold;
-  cursor: pointer;
-}
+.container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f6f9; font-family: Arial, sans-serif; padding: 20px; }
+.card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 480px; text-align: center; }
+h2 { color: #1a252f; margin-bottom: 5px; }
+.subtit { color: #666; font-size: 14px; margin-bottom: 20px; }
+.form-group { margin-bottom: 15px; }
+input { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccd1d1; border-radius: 8px; box-sizing: border-box; text-align: center; }
+.btn { width: 100%; padding: 12px; background-color: #2c3e50; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
 .btn:hover { background-color: #1a252f; }
-.info-empleado {
-  text-align: left;
-  margin-bottom: 10px;
-  font-size: 13px;
-  color: #444;
-  background: #f8f9fa;
-  padding: 10px;
-  border-radius: 6px;
-}
-.badge-area {
-  color: #2980b9;
-  font-weight: bold;
-}
-.instruccion {
-  font-size: 12px;
-  color: #666;
-  margin-bottom: 10px;
-  text-align: left;
-}
-.candidatos-lista {
-  max-height: 250px;
-  overflow-y: auto;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  margin-bottom: 15px;
-  text-align: left;
-}
-.candidato-item {
-  display: flex;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.candidato-item:hover {
-  background-color: #f1f8ff;
-}
-.candidato-item.seleccionado {
-  background-color: #e3f2fd;
-  border-left: 4px solid #2196f3;
-}
-.radio-circle {
-  width: 16px;
-  height: 16px;
-  border: 2px solid #aaa;
-  border-radius: 50%;
-  margin-right: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.candidato-item.seleccionado .radio-circle {
-  border-color: #2196f3;
-  background-color: #2196f3;
-}
-.candidato-info {
-  display: flex;
-  flex-direction: column;
-}
-.candidato-info strong {
-  font-size: 13px;
-  color: #333;
-}
-.candidato-info small {
-  font-size: 11px;
-  color: #777;
-}
-.btn-votar {
-  width: 100%;
-  padding: 12px;
-  background-color: #27ae60;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.btn-votar:disabled {
-  background-color: #bdc3c7;
-  cursor: not-allowed;
-}
-.btn-votar:hover:not(:disabled) { background-color: #219653; }
-.mensaje {
-  margin-top: 15px;
-  padding: 10px;
-  border-radius: 6px;
-  font-size: 13px;
-}
+.info-empleado { text-align: left; margin-bottom: 10px; font-size: 13px; color: #444; background: #f8f9fa; padding: 10px; border-radius: 6px; }
+.badge-area { color: #2980b9; font-weight: bold; }
+.instruccion { font-size: 12px; color: #666; margin-bottom: 10px; text-align: left; }
+.candidatos-lista { max-height: 250px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 15px; text-align: left; }
+.candidato-item { display: flex; align-items: center; padding: 10px 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+.candidato-item:hover { background-color: #f1f8ff; }
+.candidato-item.seleccionado { background-color: #e3f2fd; border-left: 4px solid #2196f3; }
+.radio-circle { width: 16px; height: 16px; border: 2px solid #aaa; border-radius: 50%; margin-right: 12px; }
+.candidato-item.seleccionado .radio-circle { border-color: #2196f3; background-color: #2196f3; }
+.candidato-info { display: flex; flex-direction: column; }
+.candidato-info strong { font-size: 13px; color: #333; }
+.candidato-info small { font-size: 11px; color: #777; }
+.btn-votar { width: 100%; padding: 12px; background-color: #27ae60; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
+.btn-votar:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+.mensaje { margin-top: 15px; padding: 10px; border-radius: 6px; font-size: 13px; }
 .mensaje.error { background-color: #f8d7da; color: #721c24; }
 .mensaje.exito { background-color: #d4edda; color: #155724; }
-.btn-salir {
-  background-color: #7f8c8d;
-  color: white;
-  border: none;
-  padding: 8px 15px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-}
+.btn-salir { background-color: #7f8c8d; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .exito-icono { font-size: 35px; margin-bottom: 10px; }
 .link-admin { font-size: 13px; color: #2980b9; text-decoration: none; }
 .link-admin:hover { text-decoration: underline; }
