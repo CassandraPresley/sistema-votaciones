@@ -1,1012 +1,239 @@
-<template>
-
-  <div class="pantalla">
-
-    <div class="tarjeta">
-
-      <!-- ================================= -->
-      <!-- LOGIN -->
-      <!-- ================================= -->
-
-      <div v-if="!empleado && !votoRegistrado">
-
-        <h1>SISTEMA DE VOTACIÓN</h1>
-
-        <p>Ingresa tu número de expediente</p>
-
-        <input
-          v-model="expediente"
-          type="text"
-          inputmode="numeric"
-          placeholder="Número de expediente"
-          autocomplete="off"
-        />
-
-        <p>Ingresa tu token</p>
-
-        <input
-          v-model="token"
-          type="password"
-          inputmode="numeric"
-          placeholder="Token"
-          autocomplete="off"
-          @keyup.enter="entrar"
-        />
-
-        <button
-          @click="entrar"
-          :disabled="cargando"
-        >
-          {{ cargando ? 'VALIDANDO...' : 'ENTRAR' }}
-        </button>
-
-        <p
-          v-if="mensaje"
-          class="mensaje"
-        >
-          {{ mensaje }}
-        </p>
-
-      </div>
-
-
-      <!-- ================================= -->
-      <!-- EMPLEADO -->
-      <!-- ================================= -->
-
-      <div
-        v-if="empleado && !votoRegistrado"
-        class="votacion"
-      >
-
-        <h1>¡BIENVENIDO!</h1>
-
-        <h2>
-          {{ empleado.nombre }}
-        </h2>
-
-        <div class="datos-empleado">
-
-          <p>
-            <strong>Expediente:</strong>
-            {{ empleado.expediente }}
-          </p>
-
-          <p>
-            <strong>Área:</strong>
-            {{ empleado.area || 'Sin área' }}
-          </p>
-
-          <p>
-            <strong>Cargo:</strong>
-            {{ empleado.cargo || 'Sin cargo' }}
-          </p>
-
-        </div>
-
-
-        <hr>
-
-
-        <!-- ================================= -->
-        <!-- CANDIDATOS -->
-        <!-- ================================= -->
-
-        <h3>
-          CANDIDATOS DE TU ÁREA
-        </h3>
-
-        <p class="info">
-          Solamente puedes votar por empleados
-          que pertenecen a tu misma área.
-        </p>
-
-
-        <div
-          v-if="cargandoCandidatos"
-          class="cargando"
-        >
-          Cargando candidatos...
-        </div>
-
-
-        <div
-          v-else-if="candidatos.length === 0"
-          class="mensaje"
-        >
-          No hay candidatos disponibles
-          en tu área.
-        </div>
-
-
-        <div
-          v-else
-          class="candidatos"
-        >
-
-          <button
-            v-for="candidato in candidatos"
-            :key="candidato.id"
-            class="candidato"
-            :class="{
-              seleccionado:
-                candidatoSeleccionado?.id === candidato.id
-            }"
-            @click="seleccionar(candidato)"
-          >
-
-            <strong>
-              {{ candidato.nombre }}
-            </strong>
-
-            <span>
-              {{ candidato.cargo || 'Sin cargo' }}
-            </span>
-
-          </button>
-
-        </div>
-
-
-        <!-- ================================= -->
-        <!-- VOTAR -->
-        <!-- ================================= -->
-
-        <button
-          class="boton-votar"
-          :disabled="
-            !candidatoSeleccionado ||
-            votando
-          "
-          @click="registrarVoto"
-        >
-
-          {{
-            votando
-              ? 'GUARDANDO VOTO...'
-              : 'CONFIRMAR VOTO'
-          }}
-
-        </button>
-
-
-        <p
-          v-if="mensaje"
-          class="mensaje"
-        >
-          {{ mensaje }}
-        </p>
-
-      </div>
-
-
-      <!-- ================================= -->
-      <!-- VOTO REGISTRADO -->
-      <!-- ================================= -->
-
-      <div
-        v-if="votoRegistrado"
-        class="exito"
-      >
-
-        <div class="check">
-          ✓
-        </div>
-
-        <h1>
-          VOTO REGISTRADO
-        </h1>
-
-        <p>
-          Tu voto ha sido registrado correctamente.
-        </p>
-
-        <p>
-          Gracias por participar.
-        </p>
-
-      </div>
-
-    </div>
-
-  </div>
-
-</template>
-
-
 <script setup>
+import { ref } from 'vue'
+import { createClient } from '@supabase/supabase-js'
 
-const supabase = useSupabase()
-
-
-// ==========================================
-// LOGIN
-// ==========================================
+const supabaseUrl = 'https://zknsmqlwwofkalqjkdry.supabase.co'
+const supabaseKey = 'sb_publishable_rVIqNkjBurwoZI4915oWDw_glIJunVl'
+const supabase = createClient(supabaseUrl, supabaseKey)
 
 const expediente = ref('')
-const token = ref('')
-
-const empleado = ref(null)
-
-
-// ==========================================
-// VOTACIÓN
-// ==========================================
-
-const candidatos = ref([])
-const candidatoSeleccionado = ref(null)
-
-const votando = ref(false)
-const cargando = ref(false)
-const cargandoCandidatos = ref(false)
-
-const votoRegistrado = ref(false)
-
-
-// ==========================================
-// MENSAJES
-// ==========================================
-
 const mensaje = ref('')
+const tipoMensaje = ref('')
+const empleadoLogueado = ref(null)
+const votoExitoso = ref(false)
 
-
-// ==========================================
-// ENTRAR
-// ==========================================
-
-async function entrar() {
-
+const verificarAcceso = async () => {
   mensaje.value = ''
+  tipoMensaje.value = ''
 
-  const numeroExpediente =
-    expediente.value.trim()
-
-  const tokenIngresado =
-    token.value.trim()
-
-
-  if (!numeroExpediente) {
-
-    mensaje.value =
-      'Ingresa tu número de expediente'
-
+  if (!expediente.value.trim()) {
+    mensaje.value = 'Por favor ingresa tu número de expediente.'
+    tipoMensaje.value = 'error'
     return
   }
 
+  const { data: empleado, error } = await supabase
+    .from('empleados')
+    .select('*')
+    .eq('expediente', expediente.value.trim())
+    .single()
 
-  if (!tokenIngresado) {
-
-    mensaje.value =
-      'Ingresa tu token'
-
+  if (error || !empleado) {
+    mensaje.value = 'El número de expediente no se encuentra registrado.'
+    tipoMensaje.value = 'error'
     return
   }
 
-
-  cargando.value = true
-
-
-  try {
-
-    /*
-     * Login mediante nuestro endpoint:
-     *
-     * POST /api/login
-     *
-     * El endpoint valida el token
-     * en el servidor.
-     */
-
-    const respuesta = await $fetch(
-      '/api/login',
-      {
-        method: 'POST',
-
-        body: {
-          expediente:
-            numeroExpediente,
-
-          token:
-            tokenIngresado
-        }
-      }
-    )
-
-
-    if (!respuesta?.ok) {
-
-      mensaje.value =
-        respuesta?.mensaje ||
-        'Expediente o token incorrecto.'
-
-      return
-    }
-
-
-    // Login correcto
-
-    empleado.value =
-      respuesta.empleado
-
-    token.value = ''
-
-    mensaje.value = ''
-
-    candidatoSeleccionado.value = null
-
-    await cargarCandidatos()
-
-  } catch (error) {
-
-    console.error(
-      'ERROR EN LOGIN:',
-      error
-    )
-
-    mensaje.value =
-      error?.data?.mensaje ||
-      error?.data?.statusMessage ||
-      error?.message ||
-      'No fue posible iniciar sesión.'
-
-  } finally {
-
-    cargando.value = false
-
+  if (empleado.acceso_bloqueado) {
+    mensaje.value = 'Este acceso se encuentra bloqueado.'
+    tipoMensaje.value = 'error'
+    return
   }
+
+  if (empleado.ya_voto) {
+    mensaje.value = 'Usted ya ha registrado su voto anteriormente.'
+    tipoMensaje.value = 'error'
+    return
+  }
+
+  empleadoLogueado.value = empleado
+  votoExitoso.value = false
 }
 
+const registrarVoto = async () => {
+  if (!empleadoLogueado.value) return
 
-// ==========================================
-// CARGAR CANDIDATOS
-// ==========================================
+  // Actualizar en Supabase que el empleado ya votó
+  const { error } = await supabase
+    .from('empleados')
+    .update({ ya_voto: true })
+    .eq('expediente', empleadoLogueado.value.expediente)
 
-async function cargarCandidatos() {
-
-  if (!empleado.value) {
+  if (error) {
+    mensaje.value = 'Error al registrar el voto. Inténtalo de nuevo.'
+    tipoMensaje.value = 'error'
     return
   }
 
+  votoExitoso.value = true
+}
 
-  cargandoCandidatos.value = true
-
+const reiniciarSesion = () => {
+  empleadoLogueado.value = null
+  expediente.value = ''
   mensaje.value = ''
-
-
-  try {
-
-    const {
-      data,
-      error
-    } = await supabase
-      .from('empleados')
-      .select(`
-        id,
-        expediente,
-        nombre,
-        cargo,
-        area
-      `)
-      .eq(
-        'area',
-        empleado.value.area
-      )
-      .order(
-        'nombre',
-        {
-          ascending: true
-        }
-      )
-
-
-    if (error) {
-
-      console.error(
-        'ERROR CANDIDATOS:',
-        error
-      )
-
-      mensaje.value =
-        `No se pudieron cargar los candidatos: ${error.message}`
-
-      candidatos.value = []
-
-      return
-    }
-
-
-    candidatos.value =
-      (data || []).filter(
-        candidato =>
-          candidato.id !==
-          empleado.value.id
-      )
-
-  } catch (error) {
-
-    console.error(
-      'ERROR CARGANDO CANDIDATOS:',
-      error
-    )
-
-    mensaje.value =
-      'No se pudieron cargar los candidatos.'
-
-    candidatos.value = []
-
-  } finally {
-
-    cargandoCandidatos.value = false
-
-  }
+  tipoMensaje.value = ''
+  votoExitoso.value = false
 }
-
-
-// ==========================================
-// SELECCIONAR CANDIDATO
-// ==========================================
-
-function seleccionar(candidato) {
-
-  candidatoSeleccionado.value =
-    candidato
-
-  mensaje.value = ''
-}
-
-
-// ==========================================
-// DISPOSITIVO
-// ==========================================
-
-function obtenerDispositivo() {
-
-  if (
-    typeof navigator === 'undefined'
-  ) {
-
-    return {
-      dispositivo: 'Desconocido',
-      sistema_operativo: 'Desconocido',
-      navegador: 'Desconocido'
-    }
-  }
-
-
-  const userAgent =
-    navigator.userAgent || ''
-
-
-  let sistemaOperativo =
-    'Desconocido'
-
-
-  if (/Windows NT/i.test(userAgent))
-    sistemaOperativo = 'Windows'
-
-  else if (/Android/i.test(userAgent))
-    sistemaOperativo = 'Android'
-
-  else if (/iPhone|iPad|iPod/i.test(userAgent))
-    sistemaOperativo = 'iOS'
-
-  else if (/Mac OS X/i.test(userAgent))
-    sistemaOperativo = 'macOS'
-
-  else if (/Linux/i.test(userAgent))
-    sistemaOperativo = 'Linux'
-
-
-  let navegador =
-    'Desconocido'
-
-
-  if (/Edg\//i.test(userAgent))
-    navegador = 'Microsoft Edge'
-
-  else if (/OPR\//i.test(userAgent))
-    navegador = 'Opera'
-
-  else if (/Chrome\//i.test(userAgent))
-    navegador = 'Google Chrome'
-
-  else if (/Firefox\//i.test(userAgent))
-    navegador = 'Mozilla Firefox'
-
-  else if (
-    /Safari\//i.test(userAgent) &&
-    !/Chrome\//i.test(userAgent)
-  )
-    navegador = 'Safari'
-
-
-  let dispositivo =
-    'Computadora'
-
-
-  if (/iPhone/i.test(userAgent))
-    dispositivo = 'iPhone'
-
-  else if (/iPad/i.test(userAgent))
-    dispositivo = 'iPad'
-
-  else if (/Android/i.test(userAgent))
-    dispositivo = 'Dispositivo Android'
-
-  else if (/Macintosh/i.test(userAgent))
-    dispositivo = 'Mac'
-
-  else if (/Windows/i.test(userAgent))
-    dispositivo = 'Computadora Windows'
-
-
-  return {
-    dispositivo,
-    sistema_operativo:
-      sistemaOperativo,
-    navegador
-  }
-}
-
-
-// ==========================================
-// REGISTRAR VOTO
-// ==========================================
-
-async function registrarVoto() {
-
-  if (!empleado.value) {
-
-    mensaje.value =
-      'Empleado no identificado'
-
-    return
-  }
-
-
-  if (!candidatoSeleccionado.value) {
-
-    mensaje.value =
-      'Selecciona una persona para votar'
-
-    return
-  }
-
-
-  votando.value = true
-  mensaje.value = ''
-
-
-  const dispositivo =
-    obtenerDispositivo()
-
-
-  try {
-
-    const {
-      data,
-      error
-    } = await supabase.rpc(
-      'registrar_voto',
-      {
-        p_empleado_id:
-          empleado.value.id,
-
-        p_candidato_id:
-          candidatoSeleccionado.value.id,
-
-        p_dispositivo:
-          dispositivo.dispositivo,
-
-        p_sistema_operativo:
-          dispositivo.sistema_operativo,
-
-        p_navegador:
-          dispositivo.navegador
-      }
-    )
-
-
-    if (error) {
-
-      console.error(
-        'ERROR AL REGISTRAR VOTO:',
-        error
-      )
-
-      mensaje.value =
-        error.message ||
-        'No fue posible registrar el voto.'
-
-      return
-    }
-
-
-    console.log(
-      'VOTO REGISTRADO:',
-      data
-    )
-
-
-    if (
-      data &&
-      data.ok === false
-    ) {
-
-      mensaje.value =
-        data.mensaje ||
-        'No fue posible registrar el voto.'
-
-      return
-    }
-
-
-    votoRegistrado.value = true
-
-    empleado.value = null
-
-    candidatoSeleccionado.value = null
-
-    candidatos.value = []
-
-    expediente.value = ''
-
-    token.value = ''
-
-  } catch (error) {
-
-    console.error(
-      'ERROR AL REGISTRAR VOTO:',
-      error
-    )
-
-    mensaje.value =
-      error?.message ||
-      'No fue posible registrar el voto.'
-
-  } finally {
-
-    votando.value = false
-
-  }
-}
-
 </script>
 
+<template>
+  <div class="container">
+    <div class="card">
+      <h2>SISTEMA DE VOTACIÓN</h2>
+      <p class="subtit">Ingresa tu número de expediente</p>
+
+      <!-- Formulario de Ingreso -->
+      <div v-if="!empleadoLogueado">
+        <form @submit.prevent="verificarAcceso">
+          <div class="form-group">
+            <input 
+              type="text" 
+              v-model="expediente" 
+              placeholder="Número de expediente" 
+              autocomplete="off"
+            />
+          </div>
+          <button type="submit" class="btn">ENTRAR</button>
+        </form>
+      </div>
+
+      <!-- Pantalla de Votación -->
+      <div v-else-if="!votoExitoso" class="votar-section">
+        <div class="info-empleado">
+          <p><strong>Nombre:</strong> {{ empleadoLogueado.nombre }}</p>
+          <p><strong>Cargo:</strong> {{ empleadoLogueado.cargo }}</p>
+        </div>
+        <hr />
+        <h3>Confirma tu participación</h3>
+        <p class="nota">Haz clic en el botón para emitir tu voto oficial.</p>
+        
+        <button @click="registrarVoto" class="btn-votar">EMITIR VOTO</button>
+        <br /><br />
+        <button @click="reiniciarSesion" class="btn-salir">Cancelar / Salir</button>
+      </div>
+
+      <!-- Pantalla de Voto Exitoso -->
+      <div v-else class="votar-section">
+        <div class="exito-icono">✅</div>
+        <h3>¡Voto registrado con éxito!</h3>
+        <p class="subtit">Tu sufragio ha sido guardado correctamente en el sistema.</p>
+        <button @click="reiniciarSesion" class="btn">Finalizar / Siguiente</button>
+      </div>
+
+      <p v-if="mensaje" :class="['mensaje', tipoMensaje]">
+        {{ mensaje }}
+      </p>
+
+      <div style="margin-top: 25px;">
+        <NuxtLink to="/admin" class="link-admin">Ir al Panel de Administración</NuxtLink>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
-
-* {
-  box-sizing: border-box;
-}
-
-
-:global(body) {
-
-  margin: 0;
-
-  font-family:
-    Arial,
-    Helvetica,
-    sans-serif;
-
-  background:
-    linear-gradient(
-      135deg,
-      #f1f5f9,
-      #e2e8f0
-    );
-}
-
-
-.pantalla {
-
-  min-height: 100vh;
-
+.container {
   display: flex;
-
   justify-content: center;
-
   align-items: center;
-
-  padding: 20px;
+  min-height: 100vh;
+  background-color: #f4f6f9;
+  font-family: Arial, sans-serif;
 }
-
-
-.tarjeta {
-
-  width: 100%;
-
-  max-width: 650px;
-
-  padding: 40px;
-
+.card {
   background: white;
-
-  border-radius: 18px;
-
+  padding: 40px 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  width: 100%;
+  max-width: 420px;
   text-align: center;
-
-  box-shadow:
-    0 10px 30px
-    rgba(0,0,0,.15);
 }
-
-
-h1 {
-
-  margin-top: 0;
-
-  color: #1e293b;
-}
-
-
 h2 {
-
-  color: #176b3a;
-
+  color: #1a252f;
+  margin-bottom: 8px;
+  font-size: 22px;
+}
+.subtit {
+  color: #666;
+  font-size: 14px;
   margin-bottom: 20px;
 }
-
-
-h3 {
-
-  color: #334155;
+.form-group {
+  margin-bottom: 20px;
 }
-
-
 input {
-
   width: 100%;
-
-  padding: 15px;
-
-  margin: 10px 0;
-
-  border:
-    1px solid #cbd5e1;
-
-  border-radius: 9px;
-
-  font-size: 17px;
-
+  padding: 14px;
+  font-size: 16px;
+  border: 1px solid #ccd1d1;
+  border-radius: 8px;
+  box-sizing: border-box;
+  text-align: center;
   outline: none;
 }
-
-
-input:focus {
-
-  border-color:
-    #2563eb;
-
-  box-shadow:
-    0 0 0 3px
-    rgba(37,99,235,.12);
-}
-
-
-button {
-
+.btn {
   width: 100%;
-
   padding: 14px;
-
-  margin-top: 10px;
-
-  border: none;
-
-  border-radius: 9px;
-
-  background: #334155;
-
+  background-color: #2c3e50;
   color: white;
-
+  border: none;
+  border-radius: 8px;
   font-size: 16px;
-
+  font-weight: bold;
   cursor: pointer;
 }
-
-
-button:hover {
-
-  background: #1e293b;
-}
-
-
-button:disabled {
-
-  background: #94a3b8;
-
-  cursor: not-allowed;
-}
-
-
-.datos-empleado {
-
-  background: #f8fafc;
-
-  border:
-    1px solid #e2e8f0;
-
-  border-radius: 12px;
-
-  padding: 15px;
-
-  margin-top: 20px;
-
-  text-align: left;
-}
-
-
-.datos-empleado p {
-
-  margin: 8px 0;
-}
-
-
-.info {
-
-  color: #64748b;
-
-  font-size: 14px;
-}
-
-
-.cargando {
-
-  padding: 25px;
-
-  color: #64748b;
-}
-
-
-.candidatos {
-
-  display: flex;
-
-  flex-direction: column;
-
-  gap: 10px;
-
-  margin-top: 20px;
-}
-
-
-.candidato {
-
-  display: flex;
-
-  flex-direction: column;
-
-  align-items: flex-start;
-
-  text-align: left;
-
-  background: #f1f5f9;
-
-  color: #1e293b;
-
-  border:
-    2px solid transparent;
-}
-
-
-.candidato:hover {
-
-  background: #e2e8f0;
-}
-
-
-.candidato.seleccionado {
-
-  background: #dbeafe;
-
-  border-color: #2563eb;
-}
-
-
-.candidato strong {
-
-  font-size: 16px;
-}
-
-
-.candidato span {
-
-  margin-top: 5px;
-
-  font-size: 14px;
-
-  color: #64748b;
-}
-
-
-.boton-votar {
-
-  margin-top: 25px;
-
-  background: #176b3a;
-}
-
-
-.boton-votar:hover {
-
-  background: #12562f;
-}
-
-
-.mensaje {
-
-  margin-top: 20px;
-
-  color: #b91c1c;
-
-  font-weight: bold;
-}
-
-
-.exito {
-
-  padding: 35px;
-
-  background: #ecfdf5;
-
-  border:
-    1px solid #a7f3d0;
-
-  border-radius: 14px;
-
-  color: #166534;
-}
-
-
-.check {
-
-  width: 70px;
-
-  height: 70px;
-
-  margin: 0 auto 20px;
-
-  display: flex;
-
-  justify-content: center;
-
-  align-items: center;
-
-  border-radius: 50%;
-
-  background: #22c55e;
-
+.btn:hover { background-color: #1a252f; }
+.btn-votar {
+  width: 100%;
+  padding: 14px;
+  background-color: #27ae60;
   color: white;
-
-  font-size: 40px;
-
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
   font-weight: bold;
+  cursor: pointer;
+  margin-top: 10px;
 }
-
-
-hr {
-
-  border: 0;
-
-  border-top:
-    1px solid #e2e8f0;
-
-  margin: 28px 0;
+.btn-votar:hover { background-color: #219653; }
+.mensaje {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 14px;
 }
-
-
-@media (max-width: 700px) {
-
-  .pantalla {
-    padding: 15px;
-  }
-
-  .tarjeta {
-    padding: 25px 20px;
-  }
-
+.mensaje.error { background-color: #f8d7da; color: #721c24; }
+.mensaje.exito { background-color: #d4edda; color: #155724; }
+.info-empleado {
+  text-align: left;
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: #444;
 }
-
+.nota {
+  color: #555;
+  margin: 15px 0;
+  font-size: 14px;
+}
+.btn-salir {
+  background-color: #7f8c8d;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.exito-icono {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+.link-admin {
+  font-size: 13px;
+  color: #2980b9;
+  text-decoration: none;
+}
+.link-admin:hover { text-decoration: underline; }
 </style>
