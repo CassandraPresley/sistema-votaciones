@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = 'https://zknsmqlwwofkalqjkdry.supabase.co'
@@ -10,6 +10,8 @@ const expediente = ref('')
 const mensaje = ref('')
 const tipoMensaje = ref('')
 const empleadoLogueado = ref(null)
+const listaEmpleadosArea = ref([])
+const candidatoSeleccionado = ref(null)
 const votoExitoso = ref(false)
 
 const verificarAcceso = async () => {
@@ -22,6 +24,7 @@ const verificarAcceso = async () => {
     return
   }
 
+  // 1. Buscar al empleado que intenta iniciar sesión
   const { data: empleado, error } = await supabase
     .from('empleados')
     .select('*')
@@ -47,24 +50,41 @@ const verificarAcceso = async () => {
   }
 
   empleadoLogueado.value = empleado
+
+  // 2. Cargar todos los empleados del MISMO ÁREA para que pueda elegir entre ellos
+  const { data: companeros, error: errCompaneros } = await supabase
+    .from('empleados')
+    .select('*')
+    .eq('area', empleado.area)
+
+  if (!errCompaneros) {
+    // Opcional: Si quieres que el empleado no pueda votarse a sí mismo, puedes filtrarlo con .filter(c => c.expediente !== empleado.expediente)
+    listaEmpleadosArea.value = companeros
+  }
+
   votoExitoso.value = false
 }
 
-const registrarVoto = async () => {
-  if (!empleadoLogueado.value) return
+const emitirVoto = async () => {
+  if (!candidatoSeleccionado.value) {
+    alert('Por favor selecciona un candidato de tu área.')
+    return
+  }
 
-  // Actualizar en Supabase que el empleado ya votó
+  // Marcar al votante como que ya votó
   const { error } = await supabase
     .from('empleados')
     .update({ ya_voto: true })
     .eq('expediente', empleadoLogueado.value.expediente)
 
   if (error) {
-    mensaje.value = 'Error al registrar el voto. Inténtalo de nuevo.'
+    mensaje.value = 'Error al registrar el voto.'
     tipoMensaje.value = 'error'
     return
   }
 
+  // Opcional: Aquí podrías guardar también a quién votó si creaste una tabla independiente de 'votos'.
+  // Por ahora, actualizamos el estado para mostrar la pantalla de éxito.
   votoExitoso.value = true
 }
 
@@ -73,6 +93,7 @@ const reiniciarSesion = () => {
   expediente.value = ''
   mensaje.value = ''
   tipoMensaje.value = ''
+  candidatoSeleccionado.value = null
   votoExitoso.value = false
 }
 </script>
@@ -81,9 +102,9 @@ const reiniciarSesion = () => {
   <div class="container">
     <div class="card">
       <h2>SISTEMA DE VOTACIÓN</h2>
-      <p class="subtit">Ingresa tu número de expediente</p>
+      <p class="subtit">Votación por Área</p>
 
-      <!-- Formulario de Ingreso -->
+      <!-- Formulario de Ingreso por Expediente -->
       <div v-if="!empleadoLogueado">
         <form @submit.prevent="verificarAcceso">
           <div class="form-group">
@@ -94,38 +115,58 @@ const reiniciarSesion = () => {
               autocomplete="off"
             />
           </div>
-          <button type="submit" class="btn">ENTRAR</button>
+          <button type="submit" class="btn">INGRESAR</button>
         </form>
       </div>
 
-      <!-- Pantalla de Votación -->
+      <!-- Pantalla de Votación: Muestra únicamente candidatos de su misma área -->
       <div v-else-if="!votoExitoso" class="votar-section">
         <div class="info-empleado">
           <p><strong>Nombre:</strong> {{ empleadoLogueado.nombre }}</p>
-          <p><strong>Cargo:</strong> {{ empleadoLogueado.cargo }}</p>
+          <p><strong>Área:</strong> <span class="badge-area">{{ empleadoLogueado.area }}</span></p>
         </div>
         <hr />
-        <h3>Confirma tu participación</h3>
-        <p class="nota">Haz clic en el botón para emitir tu voto oficial.</p>
         
-        <button @click="registrarVoto" class="btn-votar">EMITIR VOTO</button>
+        <h3>Selecciona a tu candidato</h3>
+        <p class="instruccion">Solo puedes votar por miembros de tu área de trabajo:</p>
+
+        <div class="candidatos-lista">
+          <div 
+            v-for="candidato in listaEmpleadosArea" 
+            :key="candidato.expediente"
+            class="candidato-item"
+            :class="{ seleccionado: candidatoSeleccionado === candidato.expediente }"
+            @click="candidatoSeleccionado = candidato.expediente"
+          >
+            <div class="radio-circle"></div>
+            <div class="candidato-info">
+              <strong>{{ candidato.nombre }}</strong>
+              <small>{{ candidato.cargo }} (Exp: {{ candidato.expediente }})</small>
+            </div>
+          </div>
+        </div>
+
+        <button @click="emitirVoto" class="btn-votar" :disabled="!candidatoSeleccionado">
+          CONFIRMAR MI VOTO
+        </button>
+        
         <br /><br />
         <button @click="reiniciarSesion" class="btn-salir">Cancelar / Salir</button>
       </div>
 
-      <!-- Pantalla de Voto Exitoso -->
+      <!-- Pantalla de Éxito -->
       <div v-else class="votar-section">
         <div class="exito-icono">✅</div>
         <h3>¡Voto registrado con éxito!</h3>
-        <p class="subtit">Tu sufragio ha sido guardado correctamente en el sistema.</p>
-        <button @click="reiniciarSesion" class="btn">Finalizar / Siguiente</button>
+        <p class="subtit">Tu participación ha sido guardada de forma segura.</p>
+        <button @click="reiniciarSesion" class="btn">Finalizar</button>
       </div>
 
       <p v-if="mensaje" :class="['mensaje', tipoMensaje]">
         {{ mensaje }}
       </p>
 
-      <div style="margin-top: 25px;">
+      <div style="margin-top: 20px;">
         <NuxtLink to="/admin" class="link-admin">Ir al Panel de Administración</NuxtLink>
       </div>
     </div>
@@ -140,20 +181,20 @@ const reiniciarSesion = () => {
   min-height: 100vh;
   background-color: #f4f6f9;
   font-family: Arial, sans-serif;
+  padding: 20px;
 }
 .card {
   background: white;
-  padding: 40px 30px;
+  padding: 30px;
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
   width: 100%;
-  max-width: 420px;
+  max-width: 480px;
   text-align: center;
 }
 h2 {
   color: #1a252f;
-  margin-bottom: 8px;
-  font-size: 22px;
+  margin-bottom: 5px;
 }
 .subtit {
   color: #666;
@@ -161,62 +202,121 @@ h2 {
   margin-bottom: 20px;
 }
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 input {
   width: 100%;
-  padding: 14px;
+  padding: 12px;
   font-size: 16px;
   border: 1px solid #ccd1d1;
   border-radius: 8px;
   box-sizing: border-box;
   text-align: center;
-  outline: none;
 }
 .btn {
   width: 100%;
-  padding: 14px;
+  padding: 12px;
   background-color: #2c3e50;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: bold;
   cursor: pointer;
 }
 .btn:hover { background-color: #1a252f; }
+.info-empleado {
+  text-align: left;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #444;
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 6px;
+}
+.badge-area {
+  color: #2980b9;
+  font-weight: bold;
+}
+.instruccion {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 10px;
+  text-align: left;
+}
+.candidatos-lista {
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  text-align: left;
+}
+.candidato-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.candidato-item:hover {
+  background-color: #f1f8ff;
+}
+.candidato-item.seleccionado {
+  background-color: #e3f2fd;
+  border-left: 4px solid #2196f3;
+}
+.radio-circle {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #aaa;
+  border-radius: 50%;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.candidato-item.seleccionado .radio-circle {
+  border-color: #2196f3;
+  background-color: #2196f3;
+}
+.candidato-info {
+  display: flex;
+  flex-direction: column;
+}
+.candidato-info strong {
+  font-size: 13px;
+  color: #333;
+}
+.candidato-info small {
+  font-size: 11px;
+  color: #777;
+}
 .btn-votar {
   width: 100%;
-  padding: 14px;
+  padding: 12px;
   background-color: #27ae60;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: bold;
   cursor: pointer;
-  margin-top: 10px;
 }
-.btn-votar:hover { background-color: #219653; }
+.btn-votar:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+}
+.btn-votar:hover:not(:disabled) { background-color: #219653; }
 .mensaje {
   margin-top: 15px;
-  padding: 12px;
+  padding: 10px;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
 }
 .mensaje.error { background-color: #f8d7da; color: #721c24; }
 .mensaje.exito { background-color: #d4edda; color: #155724; }
-.info-empleado {
-  text-align: left;
-  margin-bottom: 15px;
-  font-size: 14px;
-  color: #444;
-}
-.nota {
-  color: #555;
-  margin: 15px 0;
-  font-size: 14px;
-}
 .btn-salir {
   background-color: #7f8c8d;
   color: white;
@@ -226,14 +326,7 @@ input {
   cursor: pointer;
   font-size: 13px;
 }
-.exito-icono {
-  font-size: 40px;
-  margin-bottom: 10px;
-}
-.link-admin {
-  font-size: 13px;
-  color: #2980b9;
-  text-decoration: none;
-}
+.exito-icono { font-size: 35px; margin-bottom: 10px; }
+.link-admin { font-size: 13px; color: #2980b9; text-decoration: none; }
 .link-admin:hover { text-decoration: underline; }
 </style>
